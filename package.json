@@ -1,0 +1,27 @@
+{
+  "name": "shop-app",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/No-Bounds-Digital/shop-app-by-nbd.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/No-Bounds-Digital/shop-app-by-nbd/issues"
+  },
+  "homepage": "https://github.com/No-Bounds-Digital/shop-app-by-nbd#readme",
+  "description": "",
+  "dependencies": {
+    "express": "^5.1.0",
+    "express-session": "^1.18.2",
+    "path": "^0.12.7"
+  }
+}

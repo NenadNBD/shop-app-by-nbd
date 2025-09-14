@@ -1,0 +1,15 @@
+{
+  "settings": {
+    "targetUrl": "https://shop-app.nenad-code.dev/webhook",
+    "maxConcurrentRequests": 10
+  },
+  "subscriptions": {
+    "crmObjects": [
+      {
+        "subscriptionType": "object.creation",
+        "objectName": "product",
+        "active": true
+      }
+    ]
+  }
+}

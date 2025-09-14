@@ -1,0 +1,16 @@
+{
+  "type": "crm-card",
+  "data": {
+    "title": "Sample Contact Card",
+    "uid": "sa-sample-contact-card",
+    "location": "crm.record.tab",
+    "module": {
+      "file": "sampleContactCard.jsx"
+    },
+    "objectTypes": [
+      {
+        "name": "contacts"
+      }
+    ]
+  }
+}

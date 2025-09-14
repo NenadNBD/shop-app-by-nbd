@@ -1,0 +1,34 @@
+{
+  "name": "ShopApp by NBD",
+  "uid": "shop-app-by-nbd",
+  "description": "Hubspot to Stripe Shop Application",
+  "allowedUrls": ["https://shop-app.nenad-code.dev", "https://nenad-code.dev"],
+  "auth": {
+    "redirectUrls": ["https://shop-app.nenad-code.dev/oauth-callback"],
+    "requiredScopes": ["oauth", "crm.objects.contacts.read", "crm.objects.contacts.write", "crm.schemas.contacts.read", "crm.schemas.contacts.write", 
+    "crm.objects.users.read", "settings.users.read", "settings.users.teams.read", 
+    "crm.objects.companies.read", "crm.objects.companies.write", "crm.schemas.companies.read", "crm.schemas.companies.write", 
+    "crm.objects.deals.read", "crm.objects.deals.write", "crm.schemas.deals.read", "crm.schemas.deals.write", 
+    "crm.objects.products.read", "crm.objects.products.write", "crm.objects.invoices.read", "crm.objects.invoices.write", "crm.schemas.invoices.read", "crm.schemas.invoices.write"],
+    "optionalScopes": [],
+    "conditionallyRequiredScopes": []
+  },
+  "support": {
+    "supportEmail": "nenad@noboundsdigital.com",
+    "documentationUrl": "https://www.noboundsdigital.com/",
+    "supportUrl": "https://www.noboundsdigital.com/",
+    "supportPhone": "+17178849789"
+  },
+  "extensions": {
+    "crm": {
+      "cards": [
+        {
+          "file": "./extensions/sample-contact-card.json"
+        }
+      ]
+    }
+  },
+  "webhooks": {
+    "file": "./webhooks/webhooks.json"
+  }
+}
