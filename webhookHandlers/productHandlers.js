@@ -13,7 +13,7 @@ module.exports = {
         try {
             const tokenInfo = await setHubSpotToken(getPortalId);
             const ACCESS_TOKEN = tokenInfo.access_token;
-            const response = await fetch(`https://api.hubapi.com/crm/v3/objects/products/${getProductId}`, {
+            const response = await fetch(`https://api.hubapi.com/crm/v3/objects/products/${getProductId}?properties=name&properties=price&properties=hs_object_id&properties=hs_product_type&properties=recurringbillingfrequency&properties=hs_sku&properties=description&properties=add_to_stripe_products`, {
                 method: 'GET', 
                 headers: {Authorization: `Bearer ${ACCESS_TOKEN}`, Accept: 'application/json'}
                 }
