@@ -19,7 +19,8 @@ module.exports = {
                 }
             );
             const data = await response.json();
-            console.log(data)
+            console.log('Product Creation Data:');
+            console.log(data);
         } catch (error) {
             console.error(error);
         }
