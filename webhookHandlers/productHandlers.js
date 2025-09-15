@@ -82,17 +82,17 @@ module.exports = {
                 }
             }
             const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-            let getProductId;
+            let getStripeProductId;
             try {
                 const product = await stripe.products.create(productParams);
-                getProductId = product.id;
+                getStripeProductId = product.id;
             } catch (err) {
                 console.error('Stripe Create Product error:', err.message);
                 throw err;
             }
+            console.log('Stripe Product ID: ' + getStripeProductId + ' is created');
         } catch (error) {
             console.error(error);
         }
-        console.log('Product ID: ' + getProductId + ' is created');
     }
 };
