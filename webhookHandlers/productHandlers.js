@@ -70,7 +70,6 @@ module.exports = {
                     name: String(hsData.properties.name || ''),
                     description: String(hsData.properties.description || ''),
                     active: true,
-                    type: setTypeOfProduct,
                     default_price_data: {
                         currency: 'USD',
                         unit_amount_decimal: toUnitAmountDecimalUSD(hsData.properties.price),
