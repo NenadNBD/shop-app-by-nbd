@@ -104,7 +104,7 @@ module.exports = {
                       },
                 }
             }else{
-                const { interval, interval_count } = mapHsIntervalToStripe(hsProduct.properties.recurringbillingfrequency);
+                const { interval, interval_count } = mapHsIntervalToStripe(hsData.properties.recurringbillingfrequency);
                 productParams = {
                     name: String(hsData.properties.name || ''),
                     description: String(hsData.properties.description || ''),
