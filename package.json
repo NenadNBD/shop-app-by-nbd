@@ -20,6 +20,7 @@
   "homepage": "https://github.com/No-Bounds-Digital/shop-app-by-nbd#readme",
   "description": "",
   "dependencies": {
+    "@hubspot/api-client": "^13.2.0",
     "axios": "^1.12.2",
     "express": "^5.1.0",
     "express-session": "^1.18.2",
