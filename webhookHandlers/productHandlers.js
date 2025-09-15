@@ -36,6 +36,30 @@ function toUnitAmountDecimalUSD(input) {
     const total = d100 + centsFromFrac;
     return (neg ? '-' : '') + total.toString();
 }
+// ---- HS interval → Stripe recurring mapping ----
+function mapHsIntervalToStripe(hsValue) {
+    const v = String(hsValue || '').trim().toLowerCase();
+    switch (v) {
+      case 'weekly': 
+        return { interval: 'week', interval_count: 1 };
+      case 'biweekly': 
+        return { interval: 'week', interval_count: 2 };
+      case 'monthly': 
+        return { interval: 'month', interval_count: 1 };
+      case 'quarterly': 
+        return { interval: 'month', interval_count: 3 };
+      case 'per_six_months': 
+        return { interval: 'month', interval_count: 6 };
+      case 'annually':
+        return { interval: 'year', interval_count: 1 };
+      case 'per_two_years':
+        return { interval: 'year', interval_count: 2 };
+      case 'per_three_years': 
+        return { interval: 'year', interval_count: 3 };
+      default:
+        throw new Error(`Unsupported interval: ${hsValue}`);
+    }
+  }
 
 module.exports = {
     productCreated: async (event) => {
@@ -73,6 +97,25 @@ module.exports = {
                     default_price_data: {
                         currency: 'USD',
                         unit_amount_decimal: toUnitAmountDecimalUSD(hsData.properties.price),
+                    },
+                    metadata: {
+                        sku: String(hsData.properties.hs_sku || ''),
+                        hsId: String(hsData.properties.hs_object_id || ''),
+                      },
+                }
+            }else{
+                const { interval, interval_count } = mapHsIntervalToStripe(hsProduct.properties.recurringbillingfrequency);
+                productParams = {
+                    name: String(hsData.properties.name || ''),
+                    description: String(hsData.properties.description || ''),
+                    active: true,
+                    default_price_data: {
+                        currency: 'USD',
+                        unit_amount_decimal: toUnitAmountDecimalUSD(hsData.properties.price),
+                        recurring: {
+                            interval,
+                            interval_count,
+                          },
                     },
                     metadata: {
                         sku: String(hsData.properties.hs_sku || ''),
