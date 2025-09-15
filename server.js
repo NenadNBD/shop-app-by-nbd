@@ -8,13 +8,12 @@ app.get('/oauth-callback', appInstalation);
 
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// ===== MIDDLEWARE =====
+app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// Example route
-app.get("/", (req, res) => {
-  res.send("HubSpot middleware app is running 🚀");
-});
+// Serve static frontend files
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Start server
 app.listen(PORT, () => {
