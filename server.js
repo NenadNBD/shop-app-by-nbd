@@ -1,6 +1,7 @@
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
+const cors = require('cors');
 const appInstalation  = require('./installation/app-installation');
 const productHandlers = require('./webhookHandlers/productHandlers');
 const oneTimePayment = require('./routes/oneTimePayment');
