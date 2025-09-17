@@ -22,7 +22,7 @@ async function getOneTimePriceForProduct(productId, desiredCurrency) {
   return match || list.data[0];
 }
 
-router.post('/create-payment-intent', express.json(), async (req, res) => {
+router.post('/one-time-payment-intent', express.json(), async (req, res) => {
   try {
     const { currency = 'usd', product, metadata = {} } = req.body || {};
     if (!product || typeof product !== 'string') {
