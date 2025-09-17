@@ -3,9 +3,12 @@ const session = require('express-session');
 const path = require('path');
 const appInstalation  = require('./installation/app-installation');
 const productHandlers = require('./webhookHandlers/productHandlers');
+const oneTimePayment = require('./routes/oneTimePayment');
 
 const app = express();
 app.get('/oauth-callback', appInstalation);
+
+app.use('/api/pay', oneTimePayment);
 
 const PORT = process.env.PORT || 3000;
 
