@@ -1,76 +1,57 @@
+// routes/payments.js (add this endpoint alongside your others)
 const express = require('express');
-const bodyParser = require('body-parser');
 const Stripe = require('stripe');
-
 const router = express.Router();
-
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-/* Resolve an active Price for a given Product (Stripe Product ID). */
-async function getActivePriceForProduct(productId) {
-    const list = await stripe.prices.list({
-        product: productId,
-      active: true,
-      limit: 1,
-    });
-    
-    if (!list.data.length) {
-        const err = new Error('No active Price found for product.');
-        err.status = 400;
-        throw err;
-    }
-    return list.data[0];
+// Helper: pick an active one-time price for a product, prefer matching currency
+async function getOneTimePriceForProduct(productId, desiredCurrency) {
+  const list = await stripe.prices.list({
+    product: productId,
+    active: true,
+    type: 'one_time',
+    limit: 10,
+  });
+  if (!list.data.length) {
+    const err = new Error('No active one-time Price for product');
+    err.status = 400;
+    throw err;
+  }
+  // try to match currency first
+  const match = list.data.find(p => p.currency === (desiredCurrency || '').toLowerCase());
+  return match || list.data[0];
 }
 
-/**
- * POST /one-time-payment-intent
- * Body: { productId: string, receiptEmail?: string, metadata?: object }
- *
- * Creates a PaymentIntent using the Price resolved from the Stripe Product ID.
- * Returns: { client_secret }
- */
-router.post(
-    '/one-time-payment-intent',
-    express.json(),
-    async (req, res) => {
-      try {
-        const { productId, receiptEmail, metadata } = req.body || {};
-  
-        if (!productId || typeof productId !== 'string') {
-          return res.status(400).json({ message: 'productId (Stripe Product ID) is required.' });
-        }
-  
-        // 1 Resolve Price from Product
-        const price = await getActivePriceForProduct(productId);
-        if (price.type !== 'one_time') {
-          // If you later support recurring, branch here; for now we enforce one-time.
-          return res.status(400).json({ message: 'The resolved price is not a one-time price.' });
-        }
-        if (!Number.isFinite(price.unit_amount)) {
-          return res.status(400).json({ message: 'Resolved price has no unit_amount.' });
-        }
-  
-        // 2 Create PaymentIntent (server is the source of truth)
-        const intent = await stripe.paymentIntents.create({
-          amount: price.unit_amount,
-          currency: price.currency,
-          automatic_payment_methods: { enabled: true },
-          // Optional: If you already collected email on the client at this moment, you can include it:
-          ...(receiptEmail ? { receipt_email: receiptEmail } : {}),
-          metadata: {
-            priceId: price.id,
-            productId,
-            ...(metadata && typeof metadata === 'object' ? metadata : {}),
-          },
-        });
-  
-        return res.json({ client_secret: intent.client_secret });
-      } catch (err) {
-        console.error('[one-time-payment-intent] Error:', err);
-        const status = err.status || 500;
-        return res.status(status).json({ message: err.message || 'Failed to create PaymentIntent.' });
-      }
+router.post('/create-payment-intent', express.json(), async (req, res) => {
+  try {
+    const { currency = 'usd', product, metadata = {} } = req.body || {};
+    if (!product || typeof product !== 'string') {
+      return res.status(400).json({ error: 'product (Stripe Product ID) is required' });
     }
-  );
 
-  module.exports = router;
+    const price = await getOneTimePriceForProduct(product, currency);
+    if (!Number.isFinite(price.unit_amount)) {
+      return res.status(400).json({ error: 'Resolved price has no unit_amount' });
+    }
+
+    const intent = await stripe.paymentIntents.create({
+      amount: price.unit_amount,
+      currency: price.currency, // use the price currency
+      automatic_payment_methods: { enabled: true }, // lets the Element offer multiple PMs
+      metadata: {
+        productId: product,
+        priceId: price.id,
+        ...metadata, // your order/customer fields
+      },
+      // OPTIONAL: if you want a receipt, you can set receipt_email here instead of metadata
+      // receipt_email: metadata.customer_email,
+    });
+
+    return res.json({ clientSecret: intent.client_secret });
+  } catch (err) {
+    console.error('[create-payment-intent] ', err);
+    return res.status(err.status || 500).json({ error: err.message || 'Failed to create PaymentIntent' });
+  }
+});
+
+module.exports = router;
