@@ -128,6 +128,33 @@ module.exports = {
             try {
                 const product = await stripe.products.create(productParams);
                 getStripeProductId = product.id;
+                if(getStripeProductId){
+                  try {
+                    const tokenInfo02 = await setHubSpotToken(getPortalId);
+                    const ACCESS_TOKEN_02 = tokenInfo02.access_token;
+                    const hsUpdateResponse = await fetch(`https://api.hubapi.com/crm/v3/objects/products/${getProductId}`, {
+                      method: 'PATCH',
+                      headers: {
+                        Authorization: `Bearer ${ACCESS_TOKEN_02}`,
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        properties: {
+                          stripe_id: String(getStripeProductId),
+                        },
+                      }),
+                    });
+                    if (!hsUpdateResponse.ok) {
+                      const errText = await hsUpdateResponse.text();
+                      throw new Error(`HubSpot PATCH failed ${hsUpdateResponse.status}: ${errText}`);
+                    }
+                    const hsUpdateData = await hsUpdateResponse.json();
+                    console.log('Product updated in HubSpot with Stripe ID:', hsUpdateData);
+                  } catch (error) {
+                    console.error(error);
+                  }
+                }
             } catch (err) {
                 console.error('Stripe Create Product error:', err.message);
                 throw err;
