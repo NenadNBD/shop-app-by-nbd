@@ -34,10 +34,14 @@ router.post('/one-time-payment-intent', express.json(), async (req, res) => {
       return res.status(400).json({ error: 'Resolved price has no unit_amount' });
     }
 
+    // Fetch the product to get its name
+    const prod = await stripe.products.retrieve(productId);
+
     const intent = await stripe.paymentIntents.create({
       amount: price.unit_amount,
       currency: price.currency, // use the price currency
       automatic_payment_methods: { enabled: true }, // lets the Element offer multiple PMs
+      description: prod.name,
       metadata: {
         productId: product,
         priceId: price.id,
