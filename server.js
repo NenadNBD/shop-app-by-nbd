@@ -8,29 +8,7 @@ const oneTimePayment = require('./routes/oneTimePayment');
 
 const app = express();
 
-// Allow only your HubSpot/CMS origin(s)
-const allowlist = [
-  'https://nbd-shop.nenad-code.dev',
-  'https://www.nbd-shop.nenad-code.dev', // if you might use www
-];
-
-const corsOptions = {
-  origin: function (origin, cb) {
-    // allow non-browser tools (no Origin) and your allowlisted origins
-    if (!origin || allowlist.includes(origin)) return cb(null, true);
-    return cb(new Error('Not allowed by CORS'));
-  },
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  maxAge: 86400, // cache the preflight
-  credentials: false, // set true only if you actually use cookies/auth
-};
-
 app.get('/oauth-callback', appInstalation);
-
-// Preflight for all routes under /api/pay
-app.options('/api/pay/*', cors(corsOptions));
-app.use('/api/pay', cors(corsOptions), oneTimePayment);
 
 const PORT = process.env.PORT || 3000;
 
@@ -40,6 +18,24 @@ app.use(express.json());
 
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, 'public')));
+
+const allowedOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
+  : [];
+  
+app.use(cors({
+  origin: function (origin, callback) {
+    // allow requests with no origin (like curl/postman)
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+}));
+
+app.use('/api/pay', oneTimePayment);
 
 
 app.post('/webhook', async (req, res) => {
