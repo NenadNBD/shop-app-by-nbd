@@ -1,4 +1,3 @@
-// routes/payments.js (add this endpoint alongside your others)
 const express = require('express');
 const Stripe = require('stripe');
 const router = express.Router();
