@@ -53,6 +53,7 @@ router.post('/create-simple-subscription', express.json(), async (req, res) => {
       customer: cust.id,
       items: [{ price: price.id, quantity: 1 }],
       payment_behavior: 'default_incomplete',
+      collection_method: 'charge_automatically',
       payment_settings: {
         save_default_payment_method: 'on_subscription',
         // payment_method_types: ['card'], // uncomment to force card-only
@@ -73,7 +74,7 @@ router.post('/create-simple-subscription', express.json(), async (req, res) => {
       throw new Error('No client secret available for confirmation');
     }
 
-    // Update the PaymentIntent description using the ID (not the object)
+    // Update the PaymentIntent description
     await stripe.paymentIntents.update(pi.id, { description: prod.name });
 
     // Return only what your frontend needs
