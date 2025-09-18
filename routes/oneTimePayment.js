@@ -35,7 +35,7 @@ router.post('/one-time-payment-intent', express.json(), async (req, res) => {
     }
 
     // Fetch the product to get its name
-    const prod = await stripe.products.retrieve(productId);
+    const prod = await stripe.products.retrieve(product);
 
     const intent = await stripe.paymentIntents.create({
       amount: price.unit_amount,
