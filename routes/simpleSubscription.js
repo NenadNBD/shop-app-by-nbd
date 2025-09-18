@@ -21,93 +21,93 @@ async function getRecurringPriceForProduct(productId, desiredCurrency) {
   return list.data.find(p => p.currency === desired) || list.data[0];
 }
 
-router.post('/create-simple-subscription', express.json(), async (req, res) => {
+// ========== 1) Create a SetupIntent (no customer yet) ==========
+router.post('/create-setup-intent', async (req, res) => {
   try {
-    const { currency = 'usd', product, metadata = {} } = req.body || {};
-    if (!product || typeof product !== 'string') {
-      return res.status(400).json({ error: 'product (Stripe Product ID) is required' });
-    }
-
-    // Resolve recurring price
-    const price = await getRecurringPriceForProduct(product, currency);
-    if (!Number.isFinite(price.unit_amount)) {
-      return res.status(400).json({ error: 'Resolved price has no unit_amount' });
-    }
-
-    // Fetch product for description/metadata
-    const prod = await stripe.products.retrieve(product);
-
-    // Safe full name
-    let fullName = metadata.customer_full_name;
-    if (!fullName) {
-      fullName = `${metadata.customer_first_name || ''} ${metadata.customer_last_name || ''}`.trim() || undefined;
-    }
-
-    // Always create a brand-new Customer
-    const cust = await stripe.customers.create({
-      email: metadata.customer_email || undefined,
-      name: fullName,
-      metadata: {
-        productId: product,
-        priceId: price.id,
-        product_name: prod.name,
-        ...metadata,
-      },
+    // Create a SetupIntent on Stripe. This sets up a payment method for future charges (like subscriptions)
+    const setupIntent = await stripe.setupIntents.create({
+      usage: 'off_session',
     });
 
-    // Create Subscription (no trial), Flexible billing, confirm on client
-    const sub = await stripe.subscriptions.create({
-      customer: cust.id,
+    // Return the client secret to the client
+    res.json({ clientSecret: setupIntent.client_secret });
+  } catch (error) {
+    console.error('Error creating SetupIntent:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== 2) Finalize: create Customer, attach PM, create Subscription ==========
+router.post('/submit-simple-subscription', express.json(), async (req, res) => {
+  try {
+    const {
+      email,
+      stripeProductId,
+      paymentMethodId,
+      currency = 'usd',
+      metadata = {},
+      // optionally let caller choose thank-you
+      successRedirect = 'https://nbd-shop.nenad-code.dev/thank-you',
+    } = req.body || {};
+
+    if (!email)           return res.status(400).json({ error: 'email is required' });
+    if (!stripeProductId) return res.status(400).json({ error: 'stripeProductId is required' });
+    if (!paymentMethodId) return res.status(400).json({ error: 'paymentMethodId is required' });
+
+    // Create a fresh Customer (your preference from earlier)
+    const customer = await stripe.customers.create({
+      email,
+      // Optional: name/address can be added if you collect them
+      metadata,
+    });
+
+    // Attach the saved PaymentMethod (from confirmed SetupIntent) to this Customer
+    await stripe.paymentMethods.attach(paymentMethodId, { customer: customer.id });
+
+    // Make it the default for invoices
+    await stripe.customers.update(customer.id, {
+      invoice_settings: { default_payment_method: paymentMethodId },
+    });
+
+    // Resolve the recurring Price for the given Product
+    const price = await getRecurringPriceForProduct(stripeProductId, currency);
+
+    // (Optional) fetch product for description/metadata
+    const prod = await stripe.products.retrieve(stripeProductId);
+
+    // Create the subscription. With a default PM on the customer, Stripe will attempt to pay
+    // the first invoice automatically. We keep this simple and do not bounce a client_secret
+    // back to the browser for confirmation.
+    const subscription = await stripe.subscriptions.create({
+      customer: customer.id,
       items: [{ price: price.id, quantity: 1 }],
-      payment_behavior: 'default_incomplete',
       collection_method: 'charge_automatically',
-      billing_mode: { type: 'flexible' },
-      payment_settings: {
-        save_default_payment_method: 'on_subscription',
-        // payment_method_types: ['card'], // uncomment to force card-only
-      },
+      payment_behavior: 'allow_incomplete', // keep simple; Stripe will try the first charge
+      description: prod?.name,
       metadata: {
-        productId: product,
+        productId: stripeProductId,
         priceId: price.id,
-        product_name: prod.name,
+        product_name: prod?.name,
         ...metadata,
       },
-      // Expand the invoice confirmation secret; also expand PI if present so we can set description
-      expand: ['latest_invoice.confirmation_secret', 'latest_invoice.payment_intent', 'pending_setup_intent'],
+      // You can expand invoice → payment_intent if you want to inspect status here:
+      expand: ['latest_invoice.payment_intent'],
     });
 
-    // Preferred path (Flexible): use invoice confirmation secret
-    const confirmationSecret = sub.latest_invoice?.confirmation_secret?.client_secret;
+    // 5. Update the PaymentIntent description.
+    const paymentIntentId = subscription.latest_invoice.payment_intent.id;
+    await stripe.paymentIntents.update(paymentIntentId, {
+      description: prod.name,
+  });
 
-    // If a PaymentIntent exists, update its description (optional)
-    const pi = sub.latest_invoice?.payment_intent;
-    if (pi && typeof pi === 'object' && pi.id) {
-      await stripe.paymentIntents.update(pi.id, { description: prod.name });
-    }
+    // If you want to branch on status, you can inspect:
+    // const pi = subscription.latest_invoice?.payment_intent;
+    // e.g., if (pi?.status === 'requires_action') … (out of scope for this flow)
 
-    if (confirmationSecret) {
-      return res.json({ clientSecret: confirmationSecret, intentType: 'payment' });
-    }
-
-    // Fallback: if first invoice is $0/trial/etc., confirm a SetupIntent on client
-    const si = sub.pending_setup_intent;
-    if (si?.client_secret) {
-      return res.json({ clientSecret: si.client_secret, intentType: 'setup' });
-    }
-
-    // Diagnostics before error
-    console.error('No client secret — diag:', {
-      usageType: price.recurring?.usage_type,
-      amountDue: sub.latest_invoice?.amount_due,
-      collectionMethod: sub.latest_invoice?.collection_method,
-      hasConfirmationSecret: !!sub.latest_invoice?.confirmation_secret,
-      hasPI: !!sub.latest_invoice?.payment_intent,
-      hasSI: !!sub.pending_setup_intent,
-    });
-    throw new Error('No client secret available for confirmation');
+    return subscription;
   } catch (err) {
-    console.error('[create-simple-subscription] ', err);
-    return res.status(err.status || 500).json({ error: err.message || 'Failed to create subscription' });
+    console.error('[submit-simple-subscription]', err);
+    return res.status(err.status || 500).json({ error: err.message || 'Failed to submit subscription' });
   }
 });
 
