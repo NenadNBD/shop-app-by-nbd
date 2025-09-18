@@ -64,21 +64,33 @@ router.post('/create-simple-subscription', express.json(), async (req, res) => {
         product_name: prod.name,
         ...metadata,
       },
-      expand: ['latest_invoice.payment_intent'],
+      expand: ['latest_invoice.payment_intent', 'pending_setup_intent'],
     });
 
-    // First invoice should have a PaymentIntent
-    const pi = sub.latest_invoice?.payment_intent;
+    // grab either PI or SI
+const pi = sub.latest_invoice?.payment_intent;
+const si = sub.pending_setup_intent;
 
-    if (!pi?.client_secret) {
-      throw new Error('No client secret available for confirmation');
-    }
+// only update PI description if PI exists
+if (pi?.id) {
+  await stripe.paymentIntents.update(pi.id, { description: prod.name });
+}
 
-    // Update the PaymentIntent description
-    await stripe.paymentIntents.update(pi.id, { description: prod.name });
+// return whichever client_secret exists (no more 500)
+if (pi?.client_secret) {
+  return res.json({ clientSecret: pi.client_secret, intentType: 'payment' });
+}
+if (si?.client_secret) {
+  return res.json({ clientSecret: si.client_secret, intentType: 'setup' });
+}
 
-    // Return only what your frontend needs
-    return res.json({ clientSecret: pi.client_secret });
+// extra diagnostics if neither exists
+console.error('No client secret — diag:', {
+  usageType: price.recurring?.usage_type,
+  amountDue: sub.latest_invoice?.amount_due,
+  collectionMethod: sub.latest_invoice?.collection_method,
+});
+throw new Error('No client secret available for confirmation');
   } catch (err) {
     console.error('[create-simple-subscription] ', err);
     return res.status(err.status || 500).json({ error: err.message || 'Failed to create subscription' });
