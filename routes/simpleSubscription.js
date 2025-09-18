@@ -22,19 +22,12 @@ async function getRecurringPriceForProduct(productId, desiredCurrency) {
 }
 
 // ========== 1) Create a SetupIntent (no customer yet) ==========
-router.post('/create-setup-intent', async (req, res) => {
-  try {
-    // Create a SetupIntent on Stripe. This sets up a payment method for future charges (like subscriptions)
-    const setupIntent = await stripe.setupIntents.create({
-      usage: 'off_session',
-    });
-
-    // Return the client secret to the client
-    res.json({ clientSecret: setupIntent.client_secret });
-  } catch (error) {
-    console.error('Error creating SetupIntent:', error.message);
-    res.status(500).json({ error: error.message });
-  }
+router.post('/create-setup-intent', express.json(), async (req, res) => {
+  const si = await stripe.setupIntents.create({
+    usage: 'off_session',
+    automatic_payment_methods: { enabled: true },
+  });
+  res.json({ clientSecret: si.client_secret });
 });
 
 // ========== 2) Finalize: create Customer, attach PM, create Subscription ==========
