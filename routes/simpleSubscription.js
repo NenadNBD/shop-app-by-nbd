@@ -42,8 +42,6 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
       paymentMethodId,
       currency = 'usd',
       metadata = {},
-      // optionally let caller choose thank-you
-      successRedirect = 'https://nbd-shop.nenad-code.dev/thank-you',
     } = req.body || {};
 
     if (!email)           return res.status(400).json({ error: 'email is required' });
@@ -62,6 +60,9 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
       },
     });
 
+    console.log('Do we have customer:', customer);
+    console.log('Do we have customer ID:', customer.id);
+
     // Attach the saved PaymentMethod (from confirmed SetupIntent) to this Customer
     await stripe.paymentMethods.attach(paymentMethodId, { customer: customer.id });
 
@@ -73,6 +74,9 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
     // Resolve the recurring Price for the given Product
     const price = await getRecurringPriceForProduct(stripeProductId, currency);
 
+    console.log('Do we have price:', price);
+    console.log('Do we have price ID:', price.id);
+
     // (Optional) fetch product for description/metadata
     const prod = await stripe.products.retrieve(stripeProductId);
 
@@ -82,6 +86,7 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
     const subscription = await stripe.subscriptions.create({
       customer: customer.id,
       items: [{ price: price.id, quantity: 1 }],
+      default_payment_method: paymentMethodId,
       collection_method: 'charge_automatically',
       payment_behavior: 'allow_incomplete', // keep simple; Stripe will try the first charge
       description: prod?.name,
@@ -97,6 +102,7 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
 
     // 5. Update the PaymentIntent description.
     const paymentIntentId = subscription.latest_invoice.payment_intent.id;
+    console.log('Do we have Payment Intent ID:', paymentIntentId);
     await stripe.paymentIntents.update(paymentIntentId, {
       description: prod.name,
   });
