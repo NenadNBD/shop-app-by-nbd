@@ -85,10 +85,8 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
     // back to the browser for confirmation.
     const subscription = await stripe.subscriptions.create({
       customer: customer.id,
-      items: [{ price: price.id, quantity: 1 }],
+      items: [{ price: price.id }],
       default_payment_method: paymentMethodId,
-      collection_method: 'charge_automatically',
-      payment_behavior: 'allow_incomplete', // keep simple; Stripe will try the first charge
       description: prod?.name,
       metadata: {
         productId: stripeProductId,
@@ -97,11 +95,9 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
         ...metadata,
       },
       // You can expand invoice → payment_intent if you want to inspect status here:
-      expand: ['latest_invoice.payment_intent'],
+      expand: ['latest_invoice.payment_intent']
     });
-
-    console.log('Good Lord help me:');
-    console.log(subscription.latest_invoice)
+    
     // 5. Update the PaymentIntent description.
     const pi = subscription.latest_invoice?.payment_intent;
 
@@ -109,7 +105,7 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
       await stripe.paymentIntents.update(pi?.id, { description: prod.name });
     }
 
-    console.log('Do we have Payment Intent ID:', price);
+    console.log('Do we have Payment Intent ID:',  pi?.id || null);
 
     // Always respond with JSON (don’t just `return subscription;`)
     return res.json({
