@@ -98,8 +98,6 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
       expand: ['latest_invoice.payment_intent']
     });
 
-    console.log('Subscription');
-    console.log(subscription);
     // 5. Update the PaymentIntent description.
     const pi = subscription.latest_invoice?.payment_intent;
 
@@ -107,16 +105,17 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
       await stripe.paymentIntents.update(pi?.id, { description: prod.name });
     }
 
-    console.log('Do we have Payment Intent ID:',  pi?.id || null);
+    const invoice = subscription.latest_invoice;
+    const isPaid = invoice?.status === 'paid' || invoice?.paid === true || invoice?.amount_due === invoice?.amount_paid;
 
     // Always respond with JSON (don’t just `return subscription;`)
     return res.json({
       ok: true,
       subscriptionId: subscription.id,
       customerId: customer.id,
-      latestInvoiceId: subscription.latest_invoice?.id || null,
-      paymentIntentId: pi?.id || null,
-      paymentIntentStatus: pi?.status || null,
+      latestInvoiceId: invoice.id,
+      isPaid,
+      invoiceStatus: invoice.status,
     });
   } catch (err) {
     console.error('[submit-simple-subscription]', err);
