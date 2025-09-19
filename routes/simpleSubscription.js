@@ -86,6 +86,7 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
     const subscription = await stripe.subscriptions.create({
       customer: customer.id,
       items: [{ price: price.id }],
+      payment_behavior: 'default_incomplete',
       default_payment_method: paymentMethodId,
       description: prod?.name,
       metadata: {
@@ -97,7 +98,7 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
       // You can expand invoice → payment_intent if you want to inspect status here:
       expand: ['latest_invoice.payment_intent']
     });
-    
+
     // 5. Update the PaymentIntent description.
     const pi = subscription.latest_invoice?.payment_intent;
 
@@ -115,6 +116,7 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
       latestInvoiceId: subscription.latest_invoice?.id || null,
       paymentIntentId: pi?.id || null,
       paymentIntentStatus: pi?.status || null,
+      clientSecret: pi?.client_secret || null // Return the client secret
     });
   } catch (err) {
     console.error('[submit-simple-subscription]', err);
