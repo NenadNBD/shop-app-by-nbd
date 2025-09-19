@@ -86,7 +86,6 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
     const subscription = await stripe.subscriptions.create({
       customer: customer.id,
       items: [{ price: price.id }],
-      payment_behavior: 'default_incomplete',
       default_payment_method: paymentMethodId,
       description: prod?.name,
       metadata: {
@@ -99,8 +98,8 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
       expand: ['latest_invoice.payment_intent']
     });
 
-    console.log('Subscription Lates Invoice');
-    console.log(subscription.latest_invoice);
+    console.log('Subscription');
+    console.log(subscription);
     // 5. Update the PaymentIntent description.
     const pi = subscription.latest_invoice?.payment_intent;
 
