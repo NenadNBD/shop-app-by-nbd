@@ -101,17 +101,21 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
     });
 
     // 5. Update the PaymentIntent description.
-    const paymentIntentId = subscription.latest_invoice.payment_intent.id;
-    console.log('Do we have Payment Intent ID:', paymentIntentId);
-    await stripe.paymentIntents.update(paymentIntentId, {
-      description: prod.name,
-  });
+    const pi = subscription.latest_invoice?.payment_intent;
 
-    // If you want to branch on status, you can inspect:
-    // const pi = subscription.latest_invoice?.payment_intent;
-    // e.g., if (pi?.status === 'requires_action') … (out of scope for this flow)
+    if (pi?.id) {
+      await stripe.paymentIntents.update(pi.id, { description: prod.name });
+    }
 
-    return subscription;
+    // Always respond with JSON (don’t just `return subscription;`)
+    return res.json({
+      ok: true,
+      subscriptionId: subscription.id,
+      customerId: customer.id,
+      latestInvoiceId: subscription.latest_invoice?.id || null,
+      paymentIntentId: pi?.id || null,
+      paymentIntentStatus: pi?.status || null,
+    });
   } catch (err) {
     console.error('[submit-simple-subscription]', err);
     return res.status(err.status || 500).json({ error: err.message || 'Failed to submit subscription' });
