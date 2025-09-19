@@ -116,7 +116,7 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
       latestInvoiceId: subscription.latest_invoice?.id || null,
       paymentIntentId: pi?.id || null,
       paymentIntentStatus: pi?.status || null,
-      clientSecret: pi?.client_secret || null // Return the client secret
+      subscriptionClientSecret: pi?.client_secret || null // Return the client secret
     });
   } catch (err) {
     console.error('[submit-simple-subscription]', err);
