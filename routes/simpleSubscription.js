@@ -35,6 +35,9 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
   try {
     const {
       email,
+      firstName,
+      lastName,
+      fullName,
       stripeProductId,
       paymentMethodId,
       currency = 'usd',
@@ -50,8 +53,13 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
     // Create a fresh Customer (your preference from earlier)
     const customer = await stripe.customers.create({
       email,
+      name: fullName,
       // Optional: name/address can be added if you collect them
-      metadata,
+      metadata: {
+        first_name: firstName || "",
+        last_name: lastName || "",
+        full_name: firstName + ' ' +  lastName,
+      },
     });
 
     // Attach the saved PaymentMethod (from confirmed SetupIntent) to this Customer
