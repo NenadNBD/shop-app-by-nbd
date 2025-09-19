@@ -86,8 +86,7 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
     const subscription = await stripe.subscriptions.create({
       customer: customer.id,
       items: [{ price: price.id }],
-      collection_method: 'charge_automatically',
-      payment_behavior: 'allow_incomplete',
+      payment_behavior: 'default_incomplete',
       default_payment_method: paymentMethodId,
       description: prod?.name,
       metadata: {
@@ -97,41 +96,29 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
         ...metadata,
       },
       // You can expand invoice → payment_intent if you want to inspect status here:
-      expand: ['latest_invoice'],
+      expand: ['latest_invoice.payment_intent']
     });
 
-    const invoiceId = subscription.latest_invoice?.id;
-    if (!invoiceId) {
-      return res.status(500).json({ error: 'Subscription created but no latest_invoice present' });
+    console.log('Subscription Lates Invoice');
+    console.log(subscription.latest_invoice);
+    // 5. Update the PaymentIntent description.
+    const pi = subscription.latest_invoice?.payment_intent;
+
+    if (pi?.id) {
+      await stripe.paymentIntents.update(pi?.id, { description: prod.name });
     }
 
-    // 4 Poll for the PaymentIntent (or fall back to Charge → PI)
-    const { paymentIntent, via, attempt, invoice } =
-      await findPaymentIntentForInvoice(invoiceId, { maxAttempts: 5, delayMs: 450 });
+    console.log('Do we have Payment Intent ID:',  pi?.id || null);
 
-    // 5 If we managed to find/attach a PaymentIntent, enrich it (e.g., set description)
-    if (paymentIntent?.id && prod?.name) {
-      try {
-        await stripe.paymentIntents.update(paymentIntent.id, { description: prod.name });
-      } catch (e) {
-        // non-fatal: log and continue
-        console.warn('Could not update PaymentIntent description:', e?.message || e);
-      }
-    }
-
-    // 6 Respond (minimal fields needed by your frontend, plus a few diagnostics)
+    // Always respond with JSON (don’t just `return subscription;`)
     return res.json({
+      ok: true,
       subscriptionId: subscription.id,
       customerId: customer.id,
-      latestInvoiceId: invoiceId,
-      paymentIntentId: paymentIntent?.id || null,
-      paymentIntentStatus: paymentIntent?.status || null,
-      amount: invoice?.amount_paid ?? invoice?.amount_due ?? null,
-      currency: invoice?.currency ?? price.currency,
-      obtainedVia: via,
-      attempts: attempt,
+      latestInvoiceId: subscription.latest_invoice?.id || null,
+      paymentIntentId: pi?.id || null,
+      paymentIntentStatus: pi?.status || null,
     });
-
   } catch (err) {
     console.error('[submit-simple-subscription]', err);
     return res.status(err.status || 500).json({ error: err.message || 'Failed to submit subscription' });
