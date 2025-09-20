@@ -31,7 +31,7 @@ router.post('/create-trial-setup-intent', express.json(), async (req, res) => {
 });
 
 // ========== 2) Finalize: create Customer, attach PM, create Subscription ==========
-router.post('/submit-simple-subscription', express.json(), async (req, res) => {
+router.post('/submit-trial-subscription', express.json(), async (req, res) => {
   try {
     const {
       email,
