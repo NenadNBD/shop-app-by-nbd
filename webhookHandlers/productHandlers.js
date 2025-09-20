@@ -88,8 +88,9 @@ module.exports = {
             }else{
                 setTypeOfProduct = 'good'
             }
+            const hubSpotPrice = toUnitAmountDecimalUSD(hsData.properties.price);
             let productParams;
-            if(!hsData.properties.recurringbillingfrequency){
+            if(!hsData.properties.recurringbillingfrequency && hubSpotPrice > 0){
                 productParams = {
                     name: String(hsData.properties.name || ''),
                     description: String(hsData.properties.description || ''),
@@ -103,7 +104,23 @@ module.exports = {
                         hsId: String(hsData.properties.hs_object_id || ''),
                       },
                 }
-            }else{
+            }else if(!hsData.properties.recurringbillingfrequency && hubSpotPrice == 0){
+              productParams = {
+                name: String(hsData.properties.name || ''),
+                description: String(hsData.properties.description || ''),
+                active: true,
+                default_price_data: {
+                    currency: 'USD',
+                    custom_unit_amount: {
+                      enabled: true,
+                    },
+                },
+                metadata: {
+                    sku: String(hsData.properties.hs_sku || ''),
+                    hsId: String(hsData.properties.hs_object_id || ''),
+                  },
+                }
+            }else if(hsData.properties.recurringbillingfrequency){
                 const { interval, interval_count } = mapHsIntervalToStripe(hsData.properties.recurringbillingfrequency);
                 productParams = {
                     name: String(hsData.properties.name || ''),
