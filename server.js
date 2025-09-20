@@ -6,6 +6,7 @@ const appInstalation  = require('./installation/app-installation');
 const productHandlers = require('./webhookHandlers/productHandlers');
 const oneTimePayment = require('./routes/oneTimePayment');
 const simpleSubscription = require('./routes/simpleSubscription');
+const trialSubscription = require('./routes/trialSubscription');
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use(cors({
 
 app.use('/api/pay', oneTimePayment);
 app.use('/api/pay', simpleSubscription);
+app.use('/api/pay', trialSubscription);
 
 
 app.post('/webhook', async (req, res) => {

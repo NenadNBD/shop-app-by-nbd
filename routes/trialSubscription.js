@@ -22,7 +22,7 @@ async function getRecurringPriceForProduct(productId, desiredCurrency) {
 }
 
 // ========== 1) Create a SetupIntent (no customer yet) ==========
-router.post('/create-setup-intent', express.json(), async (req, res) => {
+router.post('/create-trial-setup-intent', express.json(), async (req, res) => {
   const si = await stripe.setupIntents.create({
     usage: 'off_session',
     automatic_payment_methods: { enabled: true },
@@ -41,17 +41,21 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
       stripeProductId,
       paymentMethodId,
       currency = 'usd',
+      stripeTrialPeriod,
       metadata = {},
     } = req.body || {};
 
     if (!email){
-      return res.status(400).json({ error: 'email is required' });
+        return res.status(400).json({ error: 'email is required' });
     }
     if (!stripeProductId){
-      return res.status(400).json({ error: 'stripeProductId is required' });
+        return res.status(400).json({ error: 'stripeProductId is required' });
     }
     if (!paymentMethodId){
-      return res.status(400).json({ error: 'paymentMethodId is required' });
+        return res.status(400).json({ error: 'paymentMethodId is required' });
+    }
+    if (!stripeTrialPeriod){
+        return res.status(400).json({ error: 'trailPeriod is required' });
     }
 
     // Create a fresh Customer (your preference from earlier)
@@ -93,6 +97,8 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
       customer: customer.id,
       items: [{ price: price.id }],
       default_payment_method: paymentMethodId,
+      collection_method: 'charge_automatically',
+      trial_period_days: stripeTrialPeriod,
       description: prod?.name,
       metadata: {
         productId: stripeProductId,
@@ -101,30 +107,61 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
         ...metadata,
       },
       // You can expand invoice → payment_intent if you want to inspect status here:
-      expand: ['latest_invoice.payment_intent']
+      expand: ['latest_invoice'],
     });
 
-    // 5. Update the PaymentIntent description.
-    const pi = subscription.latest_invoice?.payment_intent;
+    // Create a $0 invoice for "paper trail" right after the trial starts ----
+    let hostedInvoiceUrl = null;
+    try {
+    // 0-amount line item
+    await stripe.invoiceItems.create({
+        customer: customer.id,
+        currency: price.currency, // same currency as your price
+        amount: 0, // <- zero-dollar
+        description: `Trial started for ${prod?.name || 'subscription'} — no charge today`,
+        metadata: {
+        subscription_id: subscription.id,
+        trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : '',
+        },
+    });
 
-    if (pi?.id) {
-      await stripe.paymentIntents.update(pi?.id, { description: prod.name });
+    // create a draft invoice (send_invoice gives you a hosted URL)
+    const draftInv = await stripe.invoices.create({
+        customer: customer.id,
+        collection_method: 'send_invoice', // ensures hosted_invoice_url is available
+        metadata: {
+        subscription_id: subscription.id,
+        purpose: 'trial_receipt',
+        },
+    });
+
+    // finalize so the hosted URL is generated
+    const finalized = await stripe.invoices.finalizeInvoice(draftInv.id);
+    hostedInvoiceUrl = finalized.hosted_invoice_url || null;
+    } catch (e) {
+    console.warn('[trial $0 invoice] skipped:', e?.message || e);
     }
 
-    const invoice = subscription.latest_invoice;
-    const isPaid = invoice?.status === 'paid' || invoice?.paid === true || invoice?.amount_due === invoice?.amount_paid;
+    // Build response for trial flow (no payment/PI expected now)
+    const trialEndISO = subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null;
 
-    // Always respond with JSON (don’t just `return subscription;`)
+    const latestInvoiceId = subscription.latest_invoice
+    ? (typeof subscription.latest_invoice === 'string'
+        ? subscription.latest_invoice
+        : subscription.latest_invoice.id)
+    : null;
+
     return res.json({
-      ok: true,
-      subscriptionId: subscription.id,
-      customerId: customer.id,
-      latestInvoiceId: invoice.id,
-      isPaid,
-      invoiceStatus: invoice.status,
+    ok: true,
+    status: subscription.status, // 'trialing'
+    subscriptionId: subscription.id,
+    customerId: customer.id,
+    latestInvoiceId,
+    trialEnd: trialEndISO,
+    trialInvoiceUrl: hostedInvoiceUrl, // <- shareable $0 invoice
     });
   } catch (err) {
-    console.error('[submit-simple-subscription]', err);
+    console.error('[submit-trial-subscription]', err);
     return res.status(err.status || 500).json({ error: err.message || 'Failed to submit subscription' });
   }
 });
