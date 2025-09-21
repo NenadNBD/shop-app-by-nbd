@@ -14,6 +14,9 @@ const app = express();
 
 app.get('/oauth-callback', appInstalation);
 
+// Mount the single Stripe webhook endpoint
+app.use(stripeWebhooks);
+
 const PORT = process.env.PORT || 3000;
 
 // ===== MIDDLEWARE =====
@@ -43,9 +46,6 @@ app.use('/api/pay', oneTimePayment);
 app.use('/api/pay', simpleSubscription);
 app.use('/api/pay', trialSubscription);
 app.use('/api/pay', donationOneTime);
-
-// Mount the single Stripe webhook endpoint
-app.use(stripeWebhooks);
 
 
 app.post('/webhook', async (req, res) => {
