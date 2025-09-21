@@ -1,5 +1,40 @@
 // handlers/subscriptions.js
+const axios = require('axios');
+const axios = require('axios');
 
+const searchContactByEmail = async (accessToken, email) => {
+  try {
+    const response = await axios.post('https://api.hubapi.com/crm/v3/objects/contacts/search', {
+      filterGroups: [
+        {
+          filters: [
+            {
+              propertyName: 'email',
+              operator: 'EQ',
+              value: email
+            }
+          ]
+        }
+      ],
+      limit: 1,
+      properties: ['id', 'email']
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+
+    if (response.data.results.length > 0) {
+      return response.data.results[0].id; // Returns the contact ID
+    } else {
+      return null; // No contact found
+    }
+  } catch (error) {
+    console.error('Error:', error.response?.data || error.message);
+    return null;
+  }
+};
 function dollars(amount, currency) {
     const d = (currency || 'usd').toLowerCase() === 'jpy' ? 0 : 2;
     return (amount / Math.pow(10, d)).toFixed(d);
@@ -8,6 +43,7 @@ function dollars(amount, currency) {
   module.exports = {
     // Lifecycle updates: trialing -> active -> past_due -> canceled …
     async onSubscriptionEvent(event) {
+        let getContactId;
       const sub = event.data.object;
       // sub.status: trialing | active | past_due | canceled | incomplete | incomplete_expired | unpaid | paused
       // sub.metadata.flow: 'trial' | 'pay_now' (if you set this on create)
@@ -22,6 +58,10 @@ function dollars(amount, currency) {
             console.log(sub.metadata.email);
             console.log(sub.metadata.full_name);
             console.log(sub.metadata.product_name);
+            searchContactByEmail('your_actual_access_token', 'example@email.com').then(contactId => {
+                getContactId = contactId;
+            });
+            console.log('Contact ID:', getContactId);
           } else if (sub.status === 'incomplete') {
             console.log('SUBSCRIPTION IS INCOMPLETE. WILL BE PAYED?');
           }
