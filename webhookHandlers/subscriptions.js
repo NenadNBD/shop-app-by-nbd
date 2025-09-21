@@ -17,7 +17,11 @@ function dollars(amount, currency) {
           if (sub.status === 'trialing') {
             console.log('TRIAL SUBSCRIPTION CREATED');
           } else if (sub.status === 'active') {
-            console.log('SUBSCRIPTION IS ACTIVE');
+            console.log('ACTIVE SUBSCRIPTION CREATED WITH ID:', sub.id);
+            console.log('ACTIVE SUBSCRIPTION CREATED FOR CUSTOMER ID:', sub.customer);
+            console.log(sub.metadata.email);
+            console.log(sub.metadata.full_name);
+            console.log(sub.metadata.product_name);
           } else if (sub.status === 'incomplete') {
             console.log('SUBSCRIPTION IS INCOMPLETE. WILL BE PAYED?');
           }
