@@ -1,6 +1,6 @@
 // handlers/subscriptions.js
 const axios = require('axios');
-const axios = require('axios');
+const setHubSpotToken = require('../database/getTokens');
 
 const searchContactByEmail = async (accessToken, email) => {
   try {
@@ -58,7 +58,9 @@ function dollars(amount, currency) {
             console.log(sub.metadata.email);
             console.log(sub.metadata.full_name);
             console.log(sub.metadata.product_name);
-            searchContactByEmail('your_actual_access_token', 'example@email.com').then(contactId => {
+            const tokenInfo = await setHubSpotToken(getPortalId);
+            const ACCESS_TOKEN = tokenInfo.access_token;
+            searchContactByEmail(ACCESS_TOKEN, String(sub.metadata.email).trim()).then(contactId => {
                 getContactId = contactId;
             });
             console.log('Contact ID:', getContactId);
