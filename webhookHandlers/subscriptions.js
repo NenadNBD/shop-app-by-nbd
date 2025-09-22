@@ -64,9 +64,51 @@ function dollars(amount, currency) {
             const ACCESS_TOKEN = tokenInfo.access_token;
             const contact = await searchContactByEmail(ACCESS_TOKEN, String(sub.metadata.email).trim());
             if (contact) {
-                console.log('Contact ID found:', contact.hs_object_id);
+                getContactId = contact.hs_object_id;
                 console.log('Contact Name found:', contact.firstname);
-              }
+            }
+            const hubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows';
+            const tokenInfo02 = await setHubSpotToken(getPortalId);
+            const ACCESS_TOKEN_02 = tokenInfo.access_token;
+            const hubDbOptions = {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${ACCESS_TOKEN_02}`, 
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  values: {
+                    contact_email: String(sub.metadata.email).trim(),
+                    contact_id: getContactId,
+                    customer_id: String(sub.customer).trim(),
+                    subscription_id: String(sub.id).trim(),
+                    subscription_name: String(sub.metadata.product_name).trim()
+                  }
+                })
+            };
+
+            try {
+            const hubDbResponse = await fetch(hubDbUrl, hubDbOptions);
+            const hubDbData = await hubDbResponse.json();
+            if(hubDbData){
+                console.log(hubDbData);
+                const publishHubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/draft/publish';
+                const tokenInfo03 = await setHubSpotToken(getPortalId);
+                const ACCESS_TOKEN_03 = tokenInfo.access_token;
+                const publishHubDboptions = {method: 'POST', headers: {Authorization: `Bearer ${ACCESS_TOKEN_03}`}};
+                try {
+                    const publishHubDbResponse = await fetch(publishHubDbUrl, publishHubDboptions);
+                    const publishHubDbData = await publishHubDbResponse.json();
+                    if(publishHubDbData){
+                        console.log('Subscription inserted and published in HubDB')
+                    }
+                } catch (error) {
+                console.error(error);
+                }
+        }
+            } catch (error) {
+            console.error(error);
+            }
           } else if (sub.status === 'incomplete') {
             console.log('SUBSCRIPTION IS INCOMPLETE. WILL BE PAYED?');
           }
