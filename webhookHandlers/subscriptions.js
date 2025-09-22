@@ -17,7 +17,7 @@ const searchContactByEmail = async (accessToken, email) => {
         }
       ],
       limit: 1,
-      properties: ['id', 'email']
+      properties: ['hs_object_id', 'email', 'firstname', 'lastname', 'phone', 'company', 'address', 'gender']
     }, {
       headers: {
         'Content-Type': 'application/json',
@@ -62,10 +62,12 @@ function dollars(amount, currency) {
             getPortalId = String(sub.metadata.hsPortalId).trim();
             const tokenInfo = await setHubSpotToken(getPortalId);
             const ACCESS_TOKEN = tokenInfo.access_token;
-            searchContactByEmail(ACCESS_TOKEN, String(sub.metadata.email).trim()).then(contactId => {
-                getContactId = contactId;
-            });
-            console.log('Contact ID:', getContactId);
+            const contact = await searchContactByEmail(ACCESS_TOKEN, String(sub.metadata.email).trim());
+            if (contact) {
+                console.log('Contact found:', contact.properties);
+                getContactId = contact.properties.hs_object_id;
+              }
+              console.log(getContactId);
           } else if (sub.status === 'incomplete') {
             console.log('SUBSCRIPTION IS INCOMPLETE. WILL BE PAYED?');
           }
