@@ -44,6 +44,7 @@ function dollars(amount, currency) {
     // Lifecycle updates: trialing -> active -> past_due -> canceled …
     async onSubscriptionEvent(event) {
         let getContactId;
+        let getPortalId;
       const sub = event.data.object;
       // sub.status: trialing | active | past_due | canceled | incomplete | incomplete_expired | unpaid | paused
       // sub.metadata.flow: 'trial' | 'pay_now' (if you set this on create)
@@ -58,6 +59,7 @@ function dollars(amount, currency) {
             console.log(sub.metadata.email);
             console.log(sub.metadata.full_name);
             console.log(sub.metadata.product_name);
+            getPortalId = String(sub.metadata.hsPortalId).trim();
             const tokenInfo = await setHubSpotToken(getPortalId);
             const ACCESS_TOKEN = tokenInfo.access_token;
             searchContactByEmail(ACCESS_TOKEN, String(sub.metadata.email).trim()).then(contactId => {

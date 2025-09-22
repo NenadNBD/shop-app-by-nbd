@@ -41,6 +41,7 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
       stripeProductId,
       paymentMethodId,
       currency = 'usd',
+      hsPortalId,
       metadata = {},
     } = req.body || {};
 
@@ -100,6 +101,7 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
         product_name: prod?.name,
         full_name: firstName + ' ' +  lastName,
         email: email,
+        hsPortalId: hsPortalId,
         ...metadata,
       },
       // You can expand invoice → payment_intent if you want to inspect status here:
