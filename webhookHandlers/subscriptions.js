@@ -26,7 +26,7 @@ const searchContactByEmail = async (accessToken, email) => {
     });
 
     if (response.data.results.length > 0) {
-      return response.data.results[0].id; // Returns the contact ID
+      return response.data.results[0].properties; // Returns the contact ID
     } else {
       return null; // No contact found
     }
@@ -64,7 +64,8 @@ function dollars(amount, currency) {
             const ACCESS_TOKEN = tokenInfo.access_token;
             const contact = await searchContactByEmail(ACCESS_TOKEN, String(sub.metadata.email).trim());
             if (contact) {
-                console.log('Contact found:', contact);
+                console.log('Contact ID found:', contact.hs_object_id);
+                console.log('Contact Name found:', contact.firstname);
               }
           } else if (sub.status === 'incomplete') {
             console.log('SUBSCRIPTION IS INCOMPLETE. WILL BE PAYED?');
