@@ -64,10 +64,8 @@ function dollars(amount, currency) {
             const ACCESS_TOKEN = tokenInfo.access_token;
             const contact = await searchContactByEmail(ACCESS_TOKEN, String(sub.metadata.email).trim());
             if (contact) {
-                console.log('Contact found:', contact.results[0].properties);
-                getContactId = contact.results[0].properties.hs_object_id;
+                console.log('Contact found:', contact);
               }
-              console.log(getContactId);
           } else if (sub.status === 'incomplete') {
             console.log('SUBSCRIPTION IS INCOMPLETE. WILL BE PAYED?');
           }
