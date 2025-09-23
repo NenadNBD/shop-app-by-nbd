@@ -51,29 +51,23 @@ function dollars(amount, currency) {
       console.log('Monitor Subscription Creation');
       switch (event.type) {
         case 'customer.subscription.created':
+          getPortalId = String(sub.metadata.hsPortalId).trim();
+          const tokenInfo = await setHubSpotToken(getPortalId);
+          const ACCESS_TOKEN = tokenInfo.access_token;
+          const contact = await searchContactByEmail(ACCESS_TOKEN, String(sub.metadata.email).trim());
+          if (contact) {
+              getContactId = contact.hs_object_id;
+              console.log('Contact Name found:', contact.firstname);
+          }
+          const hubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows';
+          const publishHubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/draft/publish';
           if (sub.status === 'trialing') {
-            console.log('TRIAL SUBSCRIPTION CREATED');
-          } else if (sub.status === 'active') {
-            console.log('ACTIVE SUBSCRIPTION CREATED WITH ID:', sub.id);
-            console.log('ACTIVE SUBSCRIPTION CREATED FOR CUSTOMER ID:', sub.customer);
-            console.log(sub.metadata.email);
-            console.log(sub.metadata.full_name);
-            console.log(sub.metadata.product_name);
-            getPortalId = String(sub.metadata.hsPortalId).trim();
-            const tokenInfo = await setHubSpotToken(getPortalId);
-            const ACCESS_TOKEN = tokenInfo.access_token;
-            const contact = await searchContactByEmail(ACCESS_TOKEN, String(sub.metadata.email).trim());
-            if (contact) {
-                getContactId = contact.hs_object_id;
-                console.log('Contact Name found:', contact.firstname);
-            }
-            const hubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows';
-            const tokenInfo02 = await setHubSpotToken(getPortalId);
-            const ACCESS_TOKEN_02 = tokenInfo.access_token;
+            const tokenInfoTr1 = await setHubSpotToken(getPortalId);
+            const ACCESS_TOKEN_TR1 = tokenInfoTr1.access_token;
             const hubDbOptions = {
                 method: 'POST',
                 headers: {
-                  Authorization: `Bearer ${ACCESS_TOKEN_02}`, 
+                  Authorization: `Bearer ${ACCESS_TOKEN_TR1}`, 
                   'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -94,10 +88,9 @@ function dollars(amount, currency) {
             const hubDbData = await hubDbResponse.json();
             if(hubDbData){
                 console.log(hubDbData);
-                const publishHubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/draft/publish';
-                const tokenInfo03 = await setHubSpotToken(getPortalId);
-                const ACCESS_TOKEN_03 = tokenInfo.access_token;
-                const publishHubDboptions = {method: 'POST', headers: {Authorization: `Bearer ${ACCESS_TOKEN_03}`}};
+                const tokenInfoTr2 = await setHubSpotToken(getPortalId);
+                const ACCESS_TOKEN_TR2 = tokenInfoTr2.access_token;
+                const publishHubDboptions = {method: 'POST', headers: {Authorization: `Bearer ${ACCESS_TOKEN_TR2}`}};
                 try {
                     const publishHubDbResponse = await fetch(publishHubDbUrl, publishHubDboptions);
                     const publishHubDbData = await publishHubDbResponse.json();
@@ -107,7 +100,55 @@ function dollars(amount, currency) {
                 } catch (error) {
                 console.error(error);
                 }
-        }
+              }
+            } catch (error) {
+            console.error(error);
+            }
+          } else if (sub.status === 'active') {
+            console.log('ACTIVE SUBSCRIPTION CREATED WITH ID:', sub.id);
+            console.log('ACTIVE SUBSCRIPTION CREATED FOR CUSTOMER ID:', sub.customer);
+            console.log(sub.metadata.email);
+            console.log(sub.metadata.full_name);
+            console.log(sub.metadata.product_name);
+            const tokenInfoAct1 = await setHubSpotToken(getPortalId);
+            const ACCESS_TOKEN_ACT1 = tokenInfoAct1.access_token;
+            const hubDbOptions = {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${ACCESS_TOKEN_ACT1}`, 
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  values: {
+                    contact_email: String(sub.metadata.email).trim(),
+                    contact_id: getContactId,
+                    customer_id: String(sub.customer).trim(),
+                    subscription_id: String(sub.id).trim(),
+                    subscription_name: String(sub.metadata.product_name).trim(),
+                    subscription_status: String(sub.status).trim(),
+                    current_period_end: new Date(sub.current_period_end * 1000)
+                  }
+                })
+            };
+
+            try {
+            const hubDbResponse = await fetch(hubDbUrl, hubDbOptions);
+            const hubDbData = await hubDbResponse.json();
+            if(hubDbData){
+                console.log(hubDbData);
+                const tokenInfoAct2 = await setHubSpotToken(getPortalId);
+                const ACCESS_TOKEN_ACT2 = tokenInfoAct2.access_token;
+                const publishHubDboptions = {method: 'POST', headers: {Authorization: `Bearer ${ACCESS_TOKEN_ACT2}`}};
+                try {
+                    const publishHubDbResponse = await fetch(publishHubDbUrl, publishHubDboptions);
+                    const publishHubDbData = await publishHubDbResponse.json();
+                    if(publishHubDbData){
+                        console.log('Subscription inserted and published in HubDB')
+                    }
+                } catch (error) {
+                console.error(error);
+                }
+              }
             } catch (error) {
             console.error(error);
             }
