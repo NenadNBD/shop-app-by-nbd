@@ -107,7 +107,7 @@ router.get('/fetch-stripe-portal', async (req, res) => {
             willBeCanceled: subscription.cancel_at_period_end,
             planName: product.name || "N/A",
             planAmount: (subscription.items.data[0].plan.amount / 100).toFixed(2),
-            currentPeriodEnd: subscription.current_period_end, // When next payment is due
+            currentPeriodEnd: subscription.items?.data?.[0]?.current_period_end ?? null, // When next payment is due
             allPaymentMethods: formattedPaymentMethods,
             customerName: customer.name,
             customerAddress: customer.address,
