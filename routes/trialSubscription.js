@@ -42,6 +42,7 @@ router.post('/submit-trial-subscription', express.json(), async (req, res) => {
       paymentMethodId,
       currency = 'usd',
       stripeTrialPeriod,
+      hsPortalId,
       metadata = {},
     } = req.body || {};
 

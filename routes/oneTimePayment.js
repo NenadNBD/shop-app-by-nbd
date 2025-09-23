@@ -23,7 +23,7 @@ async function getOneTimePriceForProduct(productId, desiredCurrency) {
 
 router.post('/one-time-payment-intent', express.json(), async (req, res) => {
   try {
-    const { currency = 'usd', product, metadata = {} } = req.body || {};
+    const { currency = 'usd', product, hsPortalId, metadata = {} } = req.body || {};
     if (!product || typeof product !== 'string') {
       return res.status(400).json({ error: 'product (Stripe Product ID) is required' });
     }
@@ -44,6 +44,7 @@ router.post('/one-time-payment-intent', express.json(), async (req, res) => {
       metadata: {
         productId: product,
         priceId: price.id,
+        hsPortalId: hsPortalId,
         ...metadata, // your order/customer fields
       },
       // OPTIONAL: if you want a receipt, you can set receipt_email here instead of metadata

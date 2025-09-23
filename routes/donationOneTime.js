@@ -23,7 +23,7 @@ async function getOneTimePriceForProduct(productId, desiredCurrency) {
 
 router.post('/donation-one-time-payment-intent', express.json(), async (req, res) => {
   try {
-    const { currency = 'usd', amount, product, isCustom, metadata = {} } = req.body || {};
+    const { currency = 'usd', amount, product, hsPortalId, isCustom, metadata = {} } = req.body || {};
     if (!product || typeof product !== 'string') {
       return res.status(400).json({ error: 'product (Stripe Product ID) is required' });
     }
@@ -79,6 +79,7 @@ router.post('/donation-one-time-payment-intent', express.json(), async (req, res
       description: prod.name,
       metadata: {
         productId: product,
+        hsPortalId: hsPortalId,
         isCustom: String(isCustomBool),
         ...(resolvedPriceId ? { priceId: resolvedPriceId } : {}),
         ...metadata, // your order/customer fields
