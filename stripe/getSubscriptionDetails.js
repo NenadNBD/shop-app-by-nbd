@@ -86,7 +86,7 @@ router.get('/fetch-stripe-portal', async (req, res) => {
                     status: invoice.status,
                     invoice_url: invoice.invoice_pdf,
                     receipt_url: receiptUrl,
-                    created: (invoice.created * 1000)[0],
+                    created: invoice.created * 1000,
                     invoiceProducts: invoiceProductNames.join(", "), // If multiple products, separate by comma
                     invoiceNumber: invoice.number,
                     invoiceCardBrand: getInvoiceCardBrand,
