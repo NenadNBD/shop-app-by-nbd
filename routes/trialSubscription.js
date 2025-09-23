@@ -104,6 +104,9 @@ router.post('/submit-trial-subscription', express.json(), async (req, res) => {
         productId: stripeProductId,
         priceId: price.id,
         product_name: prod?.name,
+        full_name: firstName + ' ' +  lastName,
+        email: email,
+        hsPortalId: hsPortalId,
         ...metadata,
       },
       // You can expand invoice → payment_intent if you want to inspect status here:
