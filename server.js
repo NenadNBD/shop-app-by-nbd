@@ -9,6 +9,7 @@ const simpleSubscription = require('./routes/simpleSubscription');
 const trialSubscription = require('./routes/trialSubscription');
 const donationOneTime = require('./routes/donationOneTime');
 const stripeWebhooks = require('./routes/stripeWebhooks');
+const getSubscriptionDetails = require('./stripe/getSubscriptionDetails');
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use('/api/pay', oneTimePayment);
 app.use('/api/pay', simpleSubscription);
 app.use('/api/pay', trialSubscription);
 app.use('/api/pay', donationOneTime);
+app.use('/api/dashboard', getSubscriptionDetails);
 
 
 app.post('/webhook', async (req, res) => {
