@@ -3,7 +3,7 @@ const Stripe = require('stripe');
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-router.get('/fetch-stripe-portal', express.json(), async (req, res) => {
+router.get('/fetch-stripe-portal', async (req, res) => {
     const { subscriptionId, customerId } = req.query;
 
     if (!subscriptionId) {
