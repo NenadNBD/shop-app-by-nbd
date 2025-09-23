@@ -16,6 +16,8 @@ router.get('/fetch-stripe-portal', async (req, res) => {
     try {
         // 🔍 Fetch subscription details from Stripe
         const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        console.log('Whole Subscription');
+        console.log(subscription);
         const customer = await stripe.customers.retrieve(customerId);
         const invoices = await stripe.invoices.list({
             customer: customerId,
