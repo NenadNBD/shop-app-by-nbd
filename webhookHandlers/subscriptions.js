@@ -77,7 +77,7 @@ function dollars(amount, currency) {
                     customer_id: String(sub.customer).trim(),
                     subscription_id: String(sub.id).trim(),
                     subscription_name: String(sub.metadata.product_name).trim(),
-                    subscription_status: String(sub.status).trim(),
+                    subscription_status: { name: String(sub.status).trim(), type: 'option' },
                     current_period_end: new Date(sub.current_period_end * 1000)
                   }
                 })
@@ -125,7 +125,7 @@ function dollars(amount, currency) {
                     customer_id: String(sub.customer).trim(),
                     subscription_id: String(sub.id).trim(),
                     subscription_name: String(sub.metadata.product_name).trim(),
-                    subscription_status: String(sub.status).trim(),
+                    subscription_status: { name: String(sub.status).trim(), type: 'option' },
                     current_period_end: new Date(sub.current_period_end * 1000)
                   }
                 })
