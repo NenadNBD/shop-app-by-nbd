@@ -22,13 +22,6 @@ app.use(stripeWebhooks);
 
 const PORT = process.env.PORT || 3000;
 
-// ===== MIDDLEWARE =====
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
-
-// Serve static frontend files
-app.use(express.static(path.join(__dirname, 'public')));
-
 const allowedOrigins = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
   : [];
@@ -45,11 +38,19 @@ app.use(cors({
   credentials: true,
 }));
 
+app.use('/api/dashboard', getSubscriptionDetails);
+
+// ===== MIDDLEWARE =====
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+
+// Serve static frontend files
+app.use(express.static(path.join(__dirname, 'public')));
+
 app.use('/api/pay', oneTimePayment);
 app.use('/api/pay', simpleSubscription);
 app.use('/api/pay', trialSubscription);
 app.use('/api/pay', donationOneTime);
-app.use('/api/dashboard', getSubscriptionDetails);
 app.use('/api/dashboard', deletePaymentMethod);
 app.use('/api/dashboard', makeDefaultPaymentMethod);
 
