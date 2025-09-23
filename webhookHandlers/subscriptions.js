@@ -82,7 +82,9 @@ function dollars(amount, currency) {
                     contact_id: getContactId,
                     customer_id: String(sub.customer).trim(),
                     subscription_id: String(sub.id).trim(),
-                    subscription_name: String(sub.metadata.product_name).trim()
+                    subscription_name: String(sub.metadata.product_name).trim(),
+                    subscription_status: String(sub.status).trim(),
+                    current_period_end: new Date(sub.current_period_end * 1000)
                   }
                 })
             };
