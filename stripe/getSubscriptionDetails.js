@@ -21,6 +21,8 @@ router.get('/fetch-stripe-portal', async (req, res) => {
             customer: customerId,
             limit: 10, // Fetch last 10 invoices
         });
+        console.log('log for 10 INVOICES???');
+        console.log(invoices);
         const productId = subscription.items.data[0].plan.product;
 
         // Step 1: Get all payment methods for the customer
