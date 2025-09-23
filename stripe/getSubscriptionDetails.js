@@ -86,7 +86,7 @@ router.get('/fetch-stripe-portal', async (req, res) => {
                     status: invoice.status,
                     invoice_url: invoice.invoice_pdf,
                     receipt_url: receiptUrl,
-                    created: new Date(invoice.created * 1000).toISOString().split("T")[0],
+                    created: invoice.created * 1000,
                     invoiceProducts: invoiceProductNames.join(", "), // If multiple products, separate by comma
                     invoiceNumber: invoice.number,
                     invoiceCardBrand: getInvoiceCardBrand,
@@ -103,7 +103,7 @@ router.get('/fetch-stripe-portal', async (req, res) => {
             willBeCanceled: subscription.cancel_at_period_end,
             planName: product.name || "N/A",
             planAmount: (subscription.items.data[0].plan.amount / 100).toFixed(2),
-            currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString().split("T")[0], // When next payment is due
+            currentPeriodEnd: subscription.current_period_end * 1000, // When next payment is due
             allPaymentMethods: formattedPaymentMethods,
             customerName: customer.name,
             customerAddress: customer.address,
