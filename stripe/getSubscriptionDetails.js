@@ -52,50 +52,67 @@ router.get('/fetch-stripe-portal', async (req, res) => {
         // Format Invoices
         const formattedInvoices = await Promise.all(
             invoices.data.map(async (invoice) => {
-                // Extract product IDs from invoice line items
-                const invoiceProductIds = invoice.lines?.data?.map(line => line.plan?.product).filter(Boolean) || [];
-    
-                // Fetch product names using Stripe API
-                const invoiceProductNames = await Promise.all(
-                    invoiceProductIds.map(async (invoiceProductId) => {
-                        try {
-                            if (!invoiceProductId) return "Unknown Product";
-                            const invoiceProduct = await stripe.products.retrieve(invoiceProductId);
-                            return invoiceProduct.name || "Unknown Product";
-                        } catch (error) {
-                            console.error(`Error fetching product ${invoiceProductId}:`, error.message);
-                            return "Unknown Product";
-                        }
-                    })
-                );
+            // Product names from expanded line items (handles subscriptions & one-offs)
+            const productNames = (invoice.lines?.data || [])
+                .map(li => li.price?.product && (typeof li.price.product === 'string'
+                ? null
+                : li.price.product.name))
+                .filter(Boolean);
 
-                // ✅ Fetch the correct receipt URL using the charge ID
-                let receiptUrl = null;
-                let getInvoiceCardBrand = null;
-                let getInvoiceLastFour = null;
-                if (invoice.charge) {
-                    try {
-                        const invoiceCharge = await stripe.charges.retrieve(invoice.charge);
-                        receiptUrl = `${invoiceCharge.receipt_url.split('?')[0]}/pdf?s=ap`;
-                        getInvoiceCardBrand = invoiceCharge.payment_method_details.card.brand;
-                        getInvoiceLastFour = invoiceCharge.payment_method_details.card.last4;
-                    } catch (error) {
-                        console.error(`Error fetching receipt for charge ${invoice.charge}:`, error.message);
-                    }
+            // 3) Find payments for this invoice (supports multiple/partial)
+            const inpayments = await stripe.invoicePayments.list({
+                invoice: invoice.id,
+                // Expand down to the charge so we can read receipt/card in one go
+                expand: ['data.payment.payment_intent.latest_charge'],
+            });
+
+            // Pick the most recent payment (or null)
+            const lastPayment = inpayments.data?.[0] || null;
+
+            // Resolve charge + card fields whether payment is via PI or direct Charge
+            let receiptUrl = null;
+            let cardBrand = null;
+            let last4 = null;
+
+            if (lastPayment?.payment?.payment_intent) {
+                const pi = lastPayment.payment.payment_intent;
+                const ch = typeof pi.latest_charge === 'string' ? null : pi.latest_charge;
+                if (ch) {
+                receiptUrl = ch.receipt_url || null;
+                const pmd = ch.payment_method_details?.card;
+                if (pmd) {
+                    cardBrand = pmd.brand || null;
+                    last4 = pmd.last4 || null;
                 }
-    
-                return {
-                    amount_due: (invoice.amount_due / 100).toFixed(2),
-                    currency: invoice.currency.toUpperCase(),
-                    status: invoice.status,
-                    invoice_url: invoice.invoice_pdf,
-                    receipt_url: receiptUrl,
-                    created: new Date(invoice.created * 1000).toISOString().split("T")[0] ?? null,
-                    invoiceProducts: invoiceProductNames.join(", "), // If multiple products, separate by comma
-                    invoiceNumber: invoice.number,
-                    invoiceCardBrand: getInvoiceCardBrand,
-                    invoiceCardLastFour: getInvoiceLastFour
-                };
+                }
+            } else if (lastPayment?.payment?.charge) {
+                const ch = lastPayment.payment.charge; // may already be expanded in future; if string, fetch it
+                const charge = typeof ch === 'string'
+                ? await stripe.charges.retrieve(ch)
+                : ch;
+                receiptUrl = charge.receipt_url || null;
+                const pmd = charge.payment_method_details?.card;
+                if (pmd) {
+                cardBrand = pmd.brand || null;
+                last4 = pmd.last4 || null;
+                }
+            }
+
+            return {
+                id: invoice.id,
+                amount_due: (invoice.amount_due / 100).toFixed(2),
+                currency: invoice.currency?.toUpperCase(),
+                status: invoice.status,
+                invoice_url: invoice.invoice_pdf,         // Stripe’s PDF link (if finalized)
+                receipt_url: receiptUrl,                  // From Charge → receipt
+                created: invoice.created
+                ? new Date(invoice.created * 1000).toISOString().split('T')[0]
+                : null,
+                invoiceProducts: productNames.join(', ') || '—',
+                invoiceNumber: invoice.number || null,
+                invoiceCardBrand: cardBrand,
+                invoiceCardLastFour: last4,
+            };
             })
         );
 
