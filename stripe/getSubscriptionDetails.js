@@ -49,70 +49,96 @@ router.get('/fetch-stripe-portal', async (req, res) => {
             cardExpYear: pm.card.exp_year,
             cardIsDefault: pm.id === defaultPaymentMethodId
         }));
-        // Format Invoices
+        // 1 Collect unique product IDs across these invoices (basil + legacy fallback)
+        const productIds = new Set();
+        for (const inv of invoices.data) {
+        for (const li of (inv.lines?.data || [])) {
+            // basil path
+            const pidBasil = li.pricing?.price_details?.product;
+            if (pidBasil) productIds.add(pidBasil);
+
+            // legacy fallback if some lines still have price.product
+            const priceProduct = li.price?.product;
+            if (typeof priceProduct === 'string') productIds.add(priceProduct);
+        }
+        }
+
+        // 2 Fetch product names once, build a cache
+        const productNameById = new Map();
+        await Promise.all([...productIds].map(async (pid) => {
+        try {
+            const p = await stripe.products.retrieve(pid);
+            productNameById.set(pid, p?.name || 'Unknown Product');
+        } catch {
+            productNameById.set(pid, 'Unknown Product');
+        }
+        }));
+
+        // 3 Format Invoices (now using cached product names)
         const formattedInvoices = await Promise.all(
             invoices.data.map(async (invoice) => {
-            // Product names from expanded line items (handles subscriptions & one-offs)
-            const productNames = (invoice.lines?.data || [])
-                .map(li => li.price?.product && (typeof li.price.product === 'string'
-                ? null
-                : li.price.product.name))
+                // Product names from invoice lines (basil first, legacy fallback)
+                const productNames = (invoice.lines?.data || [])
+                .map(li => {
+                    const pid = li.pricing?.price_details?.product
+                    ?? (typeof li.price?.product === 'string' ? li.price.product : null);
+                    return pid ? productNameById.get(pid) : null;
+                })
                 .filter(Boolean);
 
-            // 3) Find payments for this invoice (supports multiple/partial)
-            const inpayments = await stripe.invoicePayments.list({
-                invoice: invoice.id,
-                // Expand down to the charge so we can read receipt/card in one go
-                expand: ['data.payment.payment_intent.latest_charge'],
-            });
+                // Find payments for this invoice (supports multiple/partial)
+                const inpayments = await stripe.invoicePayments.list({
+                    invoice: invoice.id,
+                    expand: ['data.payment.payment_intent.latest_charge'],
+                });
 
-            // Pick the most recent payment (or null)
-            const lastPayment = inpayments.data?.[0] || null;
+                // Most recent payment (or null)
+                const lastPayment = inpayments.data?.[0] || null;
 
-            // Resolve charge + card fields whether payment is via PI or direct Charge
-            let receiptUrl = null;
-            let cardBrand = null;
-            let last4 = null;
+                // Resolve charge + card fields whether payment is via PI or direct Charge
+                let receiptUrl = null;
+                let cardBrand = null;
+                let last4 = null;
 
-            if (lastPayment?.payment?.payment_intent) {
-                const pi = lastPayment.payment.payment_intent;
-                const ch = typeof pi.latest_charge === 'string' ? null : pi.latest_charge;
-                if (ch) {
-                receiptUrl = ch.receipt_url || null;
-                const pmd = ch.payment_method_details?.card;
-                if (pmd) {
-                    cardBrand = pmd.brand || null;
-                    last4 = pmd.last4 || null;
+                if (lastPayment?.payment?.payment_intent) {
+                    const pi = lastPayment.payment.payment_intent;
+                    const ch = typeof pi.latest_charge === 'string' ? null : pi.latest_charge;
+                    if (ch) {
+                        receiptUrl = ch.receipt_url || null;
+                        const pmd = ch.payment_method_details?.card;
+                        if (pmd) {
+                            cardBrand = pmd.brand || null;
+                            last4 = pmd.last4 || null;
+                        }
+                    }
+                } else if (lastPayment?.payment?.charge) {
+                    const ch = lastPayment.payment.charge;
+                    const charge = typeof ch === 'string'
+                    ? await stripe.charges.retrieve(ch)
+                    : ch;
+                    receiptUrl = charge.receipt_url || null;
+                    const pmd = charge.payment_method_details?.card;
+                    if (pmd) {
+                        cardBrand = pmd.brand || null;
+                        last4 = pmd.last4 || null;
+                    }
                 }
-                }
-            } else if (lastPayment?.payment?.charge) {
-                const ch = lastPayment.payment.charge; // may already be expanded in future; if string, fetch it
-                const charge = typeof ch === 'string'
-                ? await stripe.charges.retrieve(ch)
-                : ch;
-                receiptUrl = charge.receipt_url || null;
-                const pmd = charge.payment_method_details?.card;
-                if (pmd) {
-                cardBrand = pmd.brand || null;
-                last4 = pmd.last4 || null;
-                }
-            }
 
-            return {
-                id: invoice.id,
-                amount_due: (invoice.amount_due / 100).toFixed(2),
-                currency: invoice.currency?.toUpperCase(),
-                status: invoice.status,
-                invoice_url: invoice.invoice_pdf,         // Stripe’s PDF link (if finalized)
-                receipt_url: receiptUrl,                  // From Charge → receipt
-                created: invoice.created
-                ? new Date(invoice.created * 1000).toISOString().split('T')[0]
-                : null,
-                invoiceProducts: productNames.join(', ') || '—',
-                invoiceNumber: invoice.number || null,
-                invoiceCardBrand: cardBrand,
-                invoiceCardLastFour: last4,
-            };
+                return {
+                    id: invoice.id,
+                    amount_due: (invoice.amount_due / 100).toFixed(2),
+                    currency: invoice.currency?.toUpperCase(),
+                    status: invoice.status,
+                    invoice_url: invoice.invoice_pdf,              // Stripe PDF (if finalized)
+                    receipt_url: receiptUrl,                       // Charge receipt
+                    created: invoice.created
+                        ? new Date(invoice.created * 1000).toISOString().split('T')[0]
+                        : null,
+                    invoiceProducts: productNames.join(', ') || '—',
+                    invoiceNumber: invoice.number || null,
+                    invoiceCardBrand: cardBrand,
+                    invoiceCardLastFour: last4,
+                };
             })
         );
 
