@@ -74,7 +74,7 @@ module.exports = {
         try {
             const tokenInfo = await setHubSpotToken(getPortalId);
             const ACCESS_TOKEN = tokenInfo.access_token;
-            const hsResponse = await fetch(`https://api.hubapi.com/crm/v3/objects/products/${getProductId}?properties=name&properties=price&properties=hs_object_id&properties=hs_product_type&properties=recurringbillingfrequency&properties=hs_sku&properties=description&properties=add_to_stripe_products`, {
+            const hsResponse = await fetch(`https://api.hubapi.com/crm/v3/objects/products/${getProductId}?properties=name&properties=price&properties=product_family&properties=hs_object_id&properties=hs_product_type&properties=recurringbillingfrequency&properties=hs_sku&properties=description&properties=add_to_stripe_products`, {
                 method: 'GET', 
                 headers: {Authorization: `Bearer ${ACCESS_TOKEN}`, Accept: 'application/json'}
                 }
@@ -135,6 +135,7 @@ module.exports = {
                           },
                     },
                     metadata: {
+                        product_family: String(hsData.properties.product_family || ''),
                         sku: String(hsData.properties.hs_sku || ''),
                         hsId: String(hsData.properties.hs_object_id || ''),
                       },
