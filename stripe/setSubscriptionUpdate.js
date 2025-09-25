@@ -12,16 +12,52 @@ router.post('/fetch-update-subscription', async (req, res) => {
     console.log('[setSubscriptionupdate] Proration Type: ' + prorationType);
     const getPortalId = portalId;
     const getHubDbRowUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows?limit=1&customer_id=' + customerId + '&subscription_id=' + subscriptionId;
-                const publishHubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/draft/publish';
-                const tokenInfoTr1 = await setHubSpotToken(getPortalId);
-                const ACCESS_TOKEN_TR1 = tokenInfoTr1.access_token;
-                const getHubDbRowOptions = {method: 'GET', headers: {Authorization: `Bearer ${ACCESS_TOKEN_TR1}`}};
+                const token01 = await setHubSpotToken(getPortalId);
+                const ACCESS_TOKEN_01 = token01.access_token;
+                const getHubDbRowOptions = {method: 'GET', headers: {Authorization: `Bearer ${ACCESS_TOKEN_01}`}};
                 let getHubDbRowId;
                 try {
                     const getHubDbRowResponse = await fetch(getHubDbRowUrl, getHubDbRowOptions);
                     const getHubDbRowData = await getHubDbRowResponse.json();
                     getHubDbRowId = getHubDbRowData.results[0].id;
-                    console.log('Row ID:', getHubDbRowId);
+                    if(getHubDbRowId){
+                        const updateHubDbRowUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows/' + getHubDbRowId + '/draft';
+                        const token02 = await setHubSpotToken(getPortalId);
+                        const ACCESS_TOKEN_02 = token02.access_token;
+                        const updateHubDbRowOptions = {
+                            method: 'PATCH', 
+                            headers: {
+                                Authorization: `Bearer ${ACCESS_TOKEN_02}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                values: {
+                                  subscription_name: 'New Product Name',
+                                }
+                              })
+                        };
+                        try {
+                            const hubDbupdateResponse = await fetch(updateHubDbRowUrl, updateHubDbRowOptions);
+                            const hubDbUpdateData = await hubDbupdateResponse.json();
+                            if(hubDbUpdateData){
+                                const publishUpdateHubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/draft/publish';
+                                const token03 = await setHubSpotToken(getPortalId);
+                                const ACCESS_TOKEN_03 = token03.access_token;
+                                const publishUpdateHubDbOptions = {method: 'POST', headers: {Authorization: `Bearer ${ACCESS_TOKEN_03}`}};
+                                try {
+                                    const publishHubDbResponse = await fetch(publishUpdateHubDbUrl, publishUpdateHubDbOptions);
+                                    const publishHubDbData = await publishHubDbResponse.json();
+                                    if(publishHubDbData){
+                                        console.log('Subscription updated and published in HubDB')
+                                    }
+                                } catch (error) {
+                                console.error(error);
+                                }
+                            }
+                        } catch (error) {
+                            console.error(error);
+                        }
+                    }
                 } catch (error) {
                 console.error(error);
                 }
