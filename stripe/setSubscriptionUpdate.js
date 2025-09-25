@@ -19,6 +19,18 @@ router.post('/fetch-update-subscription', async (req, res) => {
         getNewProductName = product.name;
         if(getPriceId){
             try {
+                const getHubDbRowUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows?limit=1&customer_id=' + customerId + '&subscription_id=' + subscriptionId;
+                const publishHubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/draft/publish';
+                const tokenInfoTr1 = await setHubSpotToken(getPortalId);
+                const ACCESS_TOKEN_TR1 = tokenInfoTr1.access_token;
+                const getHubDbRowOptions = {method: 'POST', headers: {Authorization: `Bearer ${ACCESS_TOKEN_TR1}`}};
+                try {
+                    const getHubDbRowResponse = await fetch(getHubDbRowUrl, getHubDbRowOptions);
+                    const getHubDbRowData = await getHubDbRowResponse.json();
+                    console.log(getHubDbRowData);
+                } catch (error) {
+                console.error(error);
+                }
                 // Fetch the current subscription
                 const subscription = await stripe.subscriptions.retrieve(subscriptionId);
                 
@@ -37,18 +49,6 @@ router.post('/fetch-update-subscription', async (req, res) => {
                     proration_behavior: prorationType, // Adjusts billing appropriately
                 });
                 */
-                const getHubDbRowUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows?limit=1&customer_id=' + customerId + '&subscription_id=' + subscriptionId;
-                const publishHubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/draft/publish';
-                const tokenInfoTr1 = await setHubSpotToken(getPortalId);
-                const ACCESS_TOKEN_TR1 = tokenInfoTr1.access_token;
-                const getHubDbRowOptions = {method: 'POST', headers: {Authorization: `Bearer ${ACCESS_TOKEN_TR1}`}};
-                try {
-                    const getHubDbRowResponse = await fetch(getHubDbRowUrl, getHubDbRowOptions);
-                    const getHubDbRowData = await getHubDbRowResponse.json();
-                    console.log(getHubDbRowData);
-                } catch (error) {
-                console.error(error);
-                }
                 res.json({ success: true, updatedSubscription });
             } catch (error) {
                 console.error("❌ Error updating subscription:", error.message);
