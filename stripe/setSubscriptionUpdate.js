@@ -11,7 +11,35 @@ router.post('/fetch-update-subscription', async (req, res) => {
     }
     console.log('[setSubscriptionupdate] Proration Type: ' + prorationType);
     const getPortalId = portalId;
-    const getHubDbRowUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows?limit=1&customer_id=' + customerId + '&subscription_id=' + subscriptionId;
+    try {
+        // Get PriceID from ProductID
+        let getPriceId;
+        let getNewProductName;
+        const product = await stripe.products.retrieve(newSelectedPlan);
+        getPriceId = product.default_price;
+        getNewProductName = product.name;
+        if(getPriceId){
+            try {
+                // Fetch the current subscription
+                const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+                
+                // Get the first subscription item ID (assuming a single-item subscription)
+                const subscriptionItemId = subscription.items.data[0].id;
+                
+                // Update subscription with the new price
+                const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
+                    items: [
+                        {
+                            id: subscriptionItemId,
+                            price: getPriceId, // Now using the selected plan's price ID
+                        },
+                    ],
+                    proration_behavior: prorationType, // Adjusts billing appropriately
+                });
+
+
+
+                const getHubDbRowUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows?limit=1&customer_id=' + customerId + '&subscription_id=' + subscriptionId;
                 const token01 = await setHubSpotToken(getPortalId);
                 const ACCESS_TOKEN_01 = token01.access_token;
                 const getHubDbRowOptions = {method: 'GET', headers: {Authorization: `Bearer ${ACCESS_TOKEN_01}`}};
@@ -32,7 +60,7 @@ router.post('/fetch-update-subscription', async (req, res) => {
                             },
                             body: JSON.stringify({
                                 values: {
-                                  subscription_name: 'New Product Name',
+                                  subscription_name: getNewProductName,
                                 }
                               })
                         };
@@ -61,33 +89,7 @@ router.post('/fetch-update-subscription', async (req, res) => {
                 } catch (error) {
                 console.error(error);
                 }
-    try {
-        // Get PriceID from ProductID
-        let getPriceId;
-        let getNewProductName;
-        const product = await stripe.products.retrieve(newSelectedPlan);
-        getPriceId = product.default_price;
-        getNewProductName = product.name;
-        if(getPriceId){
-            try {
-                // Fetch the current subscription
-                const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-                
-                // Get the first subscription item ID (assuming a single-item subscription)
-                const subscriptionItemId = subscription.items.data[0].id;
-                
-                // Update subscription with the new price
-                /*
-                const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
-                    items: [
-                        {
-                            id: subscriptionItemId,
-                            price: getPriceId, // Now using the selected plan's price ID
-                        },
-                    ],
-                    proration_behavior: prorationType, // Adjusts billing appropriately
-                });
-                */
+
                 res.json({ success: true, updatedSubscription });
             } catch (error) {
                 console.error("❌ Error updating subscription:", error.message);
