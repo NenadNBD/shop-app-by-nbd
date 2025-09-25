@@ -2,6 +2,7 @@ const express = require('express');
 const Stripe = require('stripe');
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const setHubSpotToken = require('../database/getTokens');
 
 router.post('/fetch-update-subscription', async (req, res) => {
     const { portalId, subscriptionId, customerId, newSelectedPlan, prorationType } = req.query;
