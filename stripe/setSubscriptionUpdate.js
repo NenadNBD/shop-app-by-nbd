@@ -16,10 +16,12 @@ router.post('/fetch-update-subscription', async (req, res) => {
                 const tokenInfoTr1 = await setHubSpotToken(getPortalId);
                 const ACCESS_TOKEN_TR1 = tokenInfoTr1.access_token;
                 const getHubDbRowOptions = {method: 'GET', headers: {Authorization: `Bearer ${ACCESS_TOKEN_TR1}`}};
+                let getHubDbRowId;
                 try {
                     const getHubDbRowResponse = await fetch(getHubDbRowUrl, getHubDbRowOptions);
                     const getHubDbRowData = await getHubDbRowResponse.json();
-                    console.log(getHubDbRowData);
+                    getHubDbRowId = getHubDbRowData.results[0].id;
+                    console.log('Row ID:', getHubDbRowId);
                 } catch (error) {
                 console.error(error);
                 }
