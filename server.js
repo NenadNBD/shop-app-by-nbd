@@ -12,6 +12,7 @@ const stripeWebhooks = require('./routes/stripeWebhooks');
 const getSubscriptionDetails = require('./stripe/getSubscriptionDetails');
 const deletePaymentMethod = require('./stripe/deletePaymentMethod');
 const makeDefaultPaymentMethod = require('./stripe/makeDefaultPaymentMethod');
+const setSubscriptionUpdate = require('./stripe/setSubscriptionUpdate');
 
 const app = express();
 
@@ -53,6 +54,7 @@ app.use('/api/pay', trialSubscription);
 app.use('/api/pay', donationOneTime);
 app.use('/api/dashboard', deletePaymentMethod);
 app.use('/api/dashboard', makeDefaultPaymentMethod);
+app.use('/api/dashboard', setSubscriptionUpdate);
 
 
 app.post('/webhook', async (req, res) => {
