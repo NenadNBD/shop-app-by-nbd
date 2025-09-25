@@ -23,7 +23,7 @@ router.post('/fetch-update-subscription', async (req, res) => {
                 const publishHubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/draft/publish';
                 const tokenInfoTr1 = await setHubSpotToken(getPortalId);
                 const ACCESS_TOKEN_TR1 = tokenInfoTr1.access_token;
-                const getHubDbRowOptions = {method: 'POST', headers: {Authorization: `Bearer ${ACCESS_TOKEN_TR1}`}};
+                const getHubDbRowOptions = {method: 'GET', headers: {Authorization: `Bearer ${ACCESS_TOKEN_TR1}`}};
                 try {
                     const getHubDbRowResponse = await fetch(getHubDbRowUrl, getHubDbRowOptions);
                     const getHubDbRowData = await getHubDbRowResponse.json();
