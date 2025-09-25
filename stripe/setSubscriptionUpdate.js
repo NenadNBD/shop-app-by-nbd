@@ -10,16 +10,7 @@ router.post('/fetch-update-subscription', async (req, res) => {
     }
     console.log('[setSubscriptionupdate] Proration Type: ' + prorationType);
     const getPortalId = portalId;
-    try {
-        // Get PriceID from ProductID
-        let getPriceId;
-        let getNewProductName;
-        const product = await stripe.products.retrieve(newSelectedPlan);
-        getPriceId = product.default_price;
-        getNewProductName = product.name;
-        if(getPriceId){
-            try {
-                const getHubDbRowUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows?limit=1&customer_id=' + customerId + '&subscription_id=' + subscriptionId;
+    const getHubDbRowUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows?limit=1&customer_id=' + customerId + '&subscription_id=' + subscriptionId;
                 const publishHubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/draft/publish';
                 const tokenInfoTr1 = await setHubSpotToken(getPortalId);
                 const ACCESS_TOKEN_TR1 = tokenInfoTr1.access_token;
@@ -31,6 +22,15 @@ router.post('/fetch-update-subscription', async (req, res) => {
                 } catch (error) {
                 console.error(error);
                 }
+    try {
+        // Get PriceID from ProductID
+        let getPriceId;
+        let getNewProductName;
+        const product = await stripe.products.retrieve(newSelectedPlan);
+        getPriceId = product.default_price;
+        getNewProductName = product.name;
+        if(getPriceId){
+            try {
                 // Fetch the current subscription
                 const subscription = await stripe.subscriptions.retrieve(subscriptionId);
                 
