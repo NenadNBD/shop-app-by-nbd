@@ -28,7 +28,7 @@ router.post('/fetch-renew-subscription', async (req, res) => {
         }
 
         // If no cancel is scheduled, nothing to do
-        if (!subscription.cancel_at_period_end && !subscription.cancel_at) {
+        if (!subscription.cancel_at_period_end || !subscription.cancel_at) {
             return res.json({
                 ok: true,
                 message: 'Subscription is already active with no scheduled cancellation.',
@@ -41,21 +41,51 @@ router.post('/fetch-renew-subscription', async (req, res) => {
         }
 
         // Finally, RENEW Subscription
-        const renewSubscription = await stripe.subscriptions.update(
-            subscriptionId,
-            { 
-                cancel_at: null, 
-                cancel_at_period_end: false 
-            }
-        );
-        return res.json({
-            ok: true,
-            subscription: {
-                id: renewSubscription.id,
-                status: renewSubscription.status,
-                current_period_end: new Date(renewSubscription.items?.data?.[0]?.current_period_end * 1000).toISOString().split("T")[0] ?? null
-            }
-        });
+        // If BOTH flags are set, do two calls (one param each)
+        if (subscription.cancel_at && subscription.cancel_at_period_end) {
+            await stripe.subscriptions.update(
+                subscriptionId,
+                { cancel_at: null }
+            );
+            const renewSubscription = await stripe.subscriptions.update(
+                subscriptionId,
+                { cancel_at_period_end: false }
+            );
+            return res.json({
+                ok: true,
+                subscription: {
+                    id: renewSubscription.id,
+                    status: renewSubscription.status,
+                    current_period_end: new Date(renewSubscription.items?.data?.[0]?.current_period_end * 1000).toISOString().split("T")[0] ?? null
+                }
+            });
+        }else if(subscription.cancel_at){
+            const renewSubscription = await stripe.subscriptions.update(
+                subscriptionId,
+                { cancel_at: null }
+            );
+            return res.json({
+                ok: true,
+                subscription: {
+                    id: renewSubscription.id,
+                    status: renewSubscription.status,
+                    current_period_end: new Date(renewSubscription.items?.data?.[0]?.current_period_end * 1000).toISOString().split("T")[0] ?? null
+                }
+            });
+        }else if(subscription.cancel_at_period_end){
+            const renewSubscription = await stripe.subscriptions.update(
+                subscriptionId,
+                { cancel_at_period_end: false }
+            );
+            return res.json({
+                ok: true,
+                subscription: {
+                    id: renewSubscription.id,
+                    status: renewSubscription.status,
+                    current_period_end: new Date(renewSubscription.items?.data?.[0]?.current_period_end * 1000).toISOString().split("T")[0] ?? null
+                }
+            });
+        }
     } catch (err) {
         console.error('renew-subscription failed:', err);
         return res.status(500).json({ error: 'server_error' });
