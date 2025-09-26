@@ -46,9 +46,6 @@ router.post('/fetch-renew-subscription', async (req, res) => {
             { 
                 cancel_at: null, 
                 cancel_at_period_end: false 
-            },
-            { 
-                idempotencyKey: `renew_${subscriptionId}` 
             }
         );
         return res.json({
