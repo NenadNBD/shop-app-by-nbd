@@ -3,7 +3,7 @@ const Stripe = require('stripe');
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-router.post('/fetch-create-setup-intent', async (req, res) => {
+router.get('/fetch-create-setup-intent', async (req, res) => {
     const { customerId, subscriptionId } = req.query;
     if (!customerId) {
         return res.status(400).json({ error: "Customer ID is required" });
