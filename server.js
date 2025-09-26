@@ -41,7 +41,6 @@ app.use(cors({
 }));
 
 app.use('/api/dashboard', getSubscriptionDetails);
-app.use('/api/dashboard', createSetupIntent);
 
 // ===== MIDDLEWARE =====
 app.use(express.urlencoded({ extended: true }));
@@ -57,6 +56,7 @@ app.use('/api/pay', donationOneTime);
 app.use('/api/dashboard', deletePaymentMethod);
 app.use('/api/dashboard', makeDefaultPaymentMethod);
 app.use('/api/dashboard', setSubscriptionUpdate);
+app.use('/api/dashboard', createSetupIntent);
 
 
 app.post('/webhook', async (req, res) => {
