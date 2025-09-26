@@ -13,6 +13,7 @@ const getSubscriptionDetails = require('./stripe/getSubscriptionDetails');
 const deletePaymentMethod = require('./stripe/deletePaymentMethod');
 const makeDefaultPaymentMethod = require('./stripe/makeDefaultPaymentMethod');
 const setSubscriptionUpdate = require('./stripe/setSubscriptionUpdate');
+const createSetupIntent = require('./stripe/createSetupIntent');
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use(cors({
 }));
 
 app.use('/api/dashboard', getSubscriptionDetails);
+app.use('/api/dashboard', createSetupIntent);
 
 // ===== MIDDLEWARE =====
 app.use(express.urlencoded({ extended: true }));
