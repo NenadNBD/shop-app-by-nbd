@@ -34,6 +34,7 @@ router.post('/fetch-set-new-payment-method', async (req, res) => {
         }else if(!makeDefault){
             console.log('No value for Make Default');
         }
+        res.json({ success: true, message: "Payment method added successfully." });
     } catch (error) {
         console.error("❌ Error setting payment method:", error.message);
         res.status(500).json({ error: "Failed to set payment method." });
