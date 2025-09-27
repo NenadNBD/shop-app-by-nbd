@@ -38,6 +38,13 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
       firstName,
       lastName,
       fullName,
+      payerType,
+      companyName,
+      streetAddress,
+      city,
+      zip,
+      country,
+      state,
       stripeProductId,
       paymentMethodId,
       currency = 'usd',
@@ -54,16 +61,34 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
     if (!paymentMethodId){
       return res.status(400).json({ error: 'paymentMethodId is required' });
     }
+    let setCustomerName = '';
+    if(payerType === 'individual'){
+      setCustomerName = fullName;
+    }else if(payerType === 'company'){
+      setCustomerName = companyName;
+    }
+    let setCustomerState = '';
+    if(country === 'US'){
+      setCustomerState = state;
+    }
 
     // Create a fresh Customer (your preference from earlier)
     const customer = await stripe.customers.create({
       email,
-      name: fullName,
+      name: setCustomerName,
+      address:{
+        line1: streetAddress || "",
+        city: city || "",
+        postal_code: zip || "",
+        country: country || "",
+        state: setCustomerState || "",
+      },
       // Optional: name/address can be added if you collect them
       metadata: {
         first_name: firstName || "",
         last_name: lastName || "",
         full_name: firstName + ' ' +  lastName,
+        payer_type: payerType || "",
       },
     });
 
