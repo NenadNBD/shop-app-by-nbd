@@ -19,6 +19,7 @@ const getInfoToCancelSubscription = require('./stripe/getInfoToCancelSubscriptio
 const cancelSubscription = require('./stripe/cancelSubscription');
 const renewSubscription = require('./stripe/renewSubscription');
 const getBillingInfo = require('./stripe/getBillingInfo');
+const updateBillingInfo = require('./stripe/updateBillingInfo');
 
 const app = express();
 
@@ -67,6 +68,7 @@ app.use('/api/dashboard', getInfoToCancelSubscription);
 app.use('/api/dashboard', cancelSubscription);
 app.use('/api/dashboard', renewSubscription);
 app.use('/api/dashboard', getBillingInfo);
+app.use('/api/dashboard', updateBillingInfo);
 
 
 app.post('/webhook', async (req, res) => {
