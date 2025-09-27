@@ -18,6 +18,7 @@ const setNewPaymentMethod = require('./stripe/setNewPaymentMethod');
 const getInfoToCancelSubscription = require('./stripe/getInfoToCancelSubscription');
 const cancelSubscription = require('./stripe/cancelSubscription');
 const renewSubscription = require('./stripe/renewSubscription');
+const getBillingInfo = require('./stripe/getBillingInfo');
 
 const app = express();
 
@@ -65,6 +66,7 @@ app.use('/api/dashboard', setNewPaymentMethod);
 app.use('/api/dashboard', getInfoToCancelSubscription);
 app.use('/api/dashboard', cancelSubscription);
 app.use('/api/dashboard', renewSubscription);
+app.use('/api/dashboard', getBillingInfo);
 
 
 app.post('/webhook', async (req, res) => {
