@@ -17,6 +17,8 @@ router.get('/fetch-get-billing-info', async (req, res) => {
                 city: getCustomerData.address.city,
                 state: getCustomerData.address.state,
                 payerType: getCustomerData.metadata.payer_type,
+                firstName: getCustomerData.metadata.first_name,
+                lastName: getCustomerData.metadata.last_name,
             }
         );
     } catch (error) {
