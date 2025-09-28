@@ -1,3 +1,5 @@
+const Stripe = require('stripe');
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
 const setHubSpotToken = require('../database/getTokens');
 
