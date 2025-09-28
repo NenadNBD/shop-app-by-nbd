@@ -153,12 +153,11 @@ function dollars(amount, currency) {
                 properties.country = getContactCountry;
               }
               const createCompanyUrl = 'https://api.hubapi.com/crm/v3/objects/companies';
-              const associationTypeId = 5;
               const createCompanyBody = {
                 properties,
                 associations: getContactId ? [{
                   to: { id: getContactId },
-                  types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId }]
+                  types: [{ associationCategory: 'USER_DEFINED', associationTypeId: 5 }]
                 }] : undefined
               };
               const tokenInfo03 = await setHubSpotToken(getPortalId);
