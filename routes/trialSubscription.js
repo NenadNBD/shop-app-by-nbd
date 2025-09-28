@@ -38,10 +38,17 @@ router.post('/submit-trial-subscription', express.json(), async (req, res) => {
       firstName,
       lastName,
       fullName,
+      payerType,
+      companyName,
+      streetAddress,
+      city,
+      zip,
+      country,
+      state,
+      stripeTrialPeriod,
       stripeProductId,
       paymentMethodId,
       currency = 'usd',
-      stripeTrialPeriod,
       hsPortalId,
       metadata = {},
     } = req.body || {};
@@ -59,15 +66,37 @@ router.post('/submit-trial-subscription', express.json(), async (req, res) => {
         return res.status(400).json({ error: 'trailPeriod is required' });
     }
 
+    let setCustomerName = '';
+    let setSubscriptionMetadataCompany = '';
+    if(payerType === 'individual'){
+      setCustomerName = fullName;
+      setSubscriptionMetadataCompany = '';
+    }else if(payerType === 'company'){
+      setCustomerName = companyName;
+      setSubscriptionMetadataCompany = companyName;
+    }
+    let setCustomerState = '';
+    if(country === 'US'){
+      setCustomerState = state;
+    }
+
     // Create a fresh Customer (your preference from earlier)
     const customer = await stripe.customers.create({
       email,
-      name: fullName,
+      name: setCustomerName,
+      address:{
+        line1: streetAddress || "",
+        city: city || "",
+        postal_code: zip || "",
+        country: country || "",
+        state: setCustomerState || "",
+      },
       // Optional: name/address can be added if you collect them
       metadata: {
         first_name: firstName || "",
         last_name: lastName || "",
         full_name: firstName + ' ' +  lastName,
+        payer_type: payerType || "",
       },
     });
 
@@ -108,6 +137,8 @@ router.post('/submit-trial-subscription', express.json(), async (req, res) => {
         full_name: firstName + ' ' +  lastName,
         email: email,
         hsPortalId: hsPortalId,
+        payer_type: payerType || "",
+        company: setSubscriptionMetadataCompany || "",
         ...metadata,
       },
       // You can expand invoice → payment_intent if you want to inspect status here:
