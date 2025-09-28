@@ -62,10 +62,13 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
       return res.status(400).json({ error: 'paymentMethodId is required' });
     }
     let setCustomerName = '';
+    let setSubscriptionMetadataCompany = '';
     if(payerType === 'individual'){
       setCustomerName = fullName;
+      setSubscriptionMetadataCompany = '';
     }else if(payerType === 'company'){
       setCustomerName = companyName;
+      setSubscriptionMetadataCompany = companyName;
     }
     let setCustomerState = '';
     if(country === 'US'){
@@ -127,6 +130,8 @@ router.post('/submit-simple-subscription', express.json(), async (req, res) => {
         full_name: firstName + ' ' +  lastName,
         email: email,
         hsPortalId: hsPortalId,
+        payer_type: payerType || "",
+        company: setSubscriptionMetadataCompany || "",
         ...metadata,
       },
       // You can expand invoice → payment_intent if you want to inspect status here:
