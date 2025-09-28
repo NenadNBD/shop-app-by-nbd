@@ -17,7 +17,48 @@ const searchContactByEmail = async (accessToken, email) => {
         }
       ],
       limit: 1,
-      properties: ['hs_object_id', 'email', 'firstname', 'lastname', 'phone', 'company', 'address', 'gender']
+      properties: ['hs_object_id', 'address', 'city', 'zip', 'state', 'country']
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+
+    if (response.data.results.length > 0) {
+      return response.data.results[0].properties; // Returns the contact ID
+    } else {
+      return null; // No contact found
+    }
+  } catch (error) {
+    console.error('Error:', error.response?.data || error.message);
+    return null;
+  }
+};
+
+const searchCompanyByNameOrDomain = async (accessToken, { name, domain }) => {
+  try {
+    const response = await axios.post('https://api.hubapi.com/crm/v3/objects/companies/search', {
+      filterGroups: [
+        {
+          filters: [
+            {
+              propertyName: 'name',
+              operator: 'EQ',
+              value: name
+            }
+          ],
+          filters: [
+            {
+              propertyName: 'domain',
+              operator: 'EQ',
+              value: domain
+            }
+          ]
+        }
+      ],
+      limit: 1,
+      properties: ['hs_object_id']
     }, {
       headers: {
         'Content-Type': 'application/json',
@@ -44,6 +85,12 @@ function dollars(amount, currency) {
     // Lifecycle updates: trialing -> active -> past_due -> canceled …
     async onSubscriptionEvent(event) {
         let getContactId;
+        let getContactAddress;
+        let getContactCity;
+        let getContactZip;
+        let getContactState;
+        let getContactCountry;
+        let getCompanyId;
         let getPortalId;
       const sub = event.data.object;
       // sub.status: trialing | active | past_due | canceled | incomplete | incomplete_expired | unpaid | paused
@@ -52,16 +99,158 @@ function dollars(amount, currency) {
       switch (event.type) {
         case 'customer.subscription.created':
           getPortalId = String(sub.metadata.hsPortalId).trim();
-          const tokenInfo = await setHubSpotToken(getPortalId);
-          const ACCESS_TOKEN = tokenInfo.access_token;
-          const contact = await searchContactByEmail(ACCESS_TOKEN, String(sub.metadata.email).trim());
+          const tokenInfo01 = await setHubSpotToken(getPortalId);
+          const ACCESS_TOKEN01 = tokenInfo01.access_token;
+          const contact = await searchContactByEmail(ACCESS_TOKEN01, String(sub.metadata.email).trim());
           if (contact) {
               getContactId = contact.hs_object_id;
+              getContactAddress = contact.address;
+              getContactCity = contact.city;
+              getContactZip = contact.zip;
+              getContactState = contact.state;
+              getContactCountry = contact.country;
               console.log('Contact Name found:', contact.firstname);
+          }
+          // Search for Company if Payer Type is COMPANY
+          if(String(sub.metadata.payer_type).trim() === 'company'){
+            const companyName = String(sub.metadata.company || '').trim().toLowerCase();
+            const emailForCompany = String(sub.metadata.email || '').trim();
+            const domain = (emailForCompany.includes('@') ? emailForCompany.split('@')[1] : '').toLowerCase();
+            const tokenInfo02 = await setHubSpotToken(getPortalId);
+            const ACCESS_TOKEN02 = tokenInfo02.access_token;
+            const company = await searchCompanyByNameOrDomain(ACCESS_TOKEN02, { name: companyName, domain });
+            if (company) {
+              getCompanyId = company.hs_object_id;
+              console.log('Company found:', company.name);
+            }else{
+              // Skip junk domains for company.domain
+              const FREE_EMAIL_DOMAINS = new Set([
+                'gmail.com','yahoo.com','outlook.com','hotmail.com','live.com','aol.com',
+                'icloud.com','me.com','gmx.com','mail.com','proton.me','zoho.com','pm.me','yandex.com','yandex.ru'
+              ]);
+              const isFree = FREE_EMAIL_DOMAINS.has(domain);
+              // Build properties (send at least name or a non-freemal domain)
+              const properties = {};
+              if (companyName){
+                properties.name = companyName;
+              }
+              if (domain && !isFree){
+                properties.domain = domain;
+              }
+              if (getContactAddress){
+                properties.address = getContactAddress;
+              }
+              if (getContactCity){
+                properties.city = getContactCity;
+              }
+              if (getContactZip){
+                properties.zip = getContactZip;
+              }
+              if (getContactState){
+                properties.state = getContactState;
+              }
+              if (getContactCountry){
+                properties.country = getContactCountry;
+              }
+              const createCompanyUrl = 'https://api.hubapi.com/crm/v3/objects/companies';
+              const associationTypeId = 5;
+              const createCompanyBody = {
+                properties,
+                associations: getContactId ? [{
+                  to: { id: getContactId },
+                  types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId }]
+                }] : undefined
+              };
+              const tokenInfo03 = await setHubSpotToken(getPortalId);
+              const ACCESS_TOKEN03 = tokenInfo03.access_token;
+              const createCompanyOptions = {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${ACCESS_TOKEN03}`, 
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(createCompanyBody)
+              };
+              try {
+                const createCompanyResponse = await fetch(createCompanyUrl, createCompanyOptions);
+                const createCompanyData = await createCompanyResponse.json();
+                if (!createCompanyResponse.ok) {
+                  console.error('Company create failed:', createCompanyResponse.status, createCompanyData);
+                } else {
+                  getCompanyId = createCompanyData.id
+                  console.log('Company created');
+                }
+              } catch (error) {
+                console.error(error);
+              }
+            }
+          }
+
+          // Prepare Deal
+          const createDealUrl = 'https://api.hubapi.com/crm/v3/objects/0-3';
+          let setDealStage;
+          if (sub.status === 'trialing') {
+            setDealStage = '3311151350';
+          }else if(sub.status === 'active'){
+            setDealStage = '3311151352';
+          }
+          let setDealName;
+          if(String(sub.metadata.payer_type).trim() === 'company'){
+            setDealName = sub.metadata.company + ' - ' + sub.metadata.product_name
+          }else if(String(sub.metadata.payer_type).trim() === 'individual'){
+            setDealName = sub.metadata.full_name + ' - ' + sub.metadata.product_name
+          }
+          const dealCloseDate = Date.now();
+          const dealOwner = '44516880';
+          const dealAmount = Number(((sub.items?.data?.[0]?.price?.unit_amount ?? sub.items?.data?.[0]?.plan?.amount ?? 0) / 100).toFixed(2));
+          const dealBody = {
+            properties: {
+              amount: dealAmount,
+              closedate: dealCloseDate,
+              dealname: setDealName,
+              pipeline: '2399805635',
+              dealstage: setDealStage,
+              hubspot_owner_id: dealOwner,
+            },
+            associations: []
+          };
+          const dealPayerType = String(sub.metadata.payer_type || '').trim().toLowerCase();
+          if (getContactId) {
+            dealBody.associations.push({
+              to: { id: String(getContactId) },
+              types: [{ associationCategory: 'USER_DEFINED', associationTypeId: 3 }]
+            });
+          }
+          if (dealPayerType === 'company' && getCompanyId) {
+            dealBody.associations.push({
+              to: { id: String(getCompanyId) },
+              types: [{ associationCategory: 'USER_DEFINED', associationTypeId: 1 }]
+            });
           }
           const hubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows';
           const publishHubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/draft/publish';
           if (sub.status === 'trialing') {
+            const tokenInfoDeal1 = await setHubSpotToken(getPortalId);
+            const ACCESS_TOKEN_DEAL1 = tokenInfoDeal1.access_token;
+            const createTrialDealOptions = {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${ACCESS_TOKEN_DEAL1}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(dealBody)
+            };
+            try {
+              const trialDealRes = await fetch(createDealUrl, createTrialDealOptions);
+              const trialDealData = await trialDealRes.json();
+              if (!trialDealRes.ok) {
+                console.error('Deal create failed:', trialDealRes.status, trialDealData);
+              } else {
+                console.log('Trial Deal created');
+              }
+            } catch (err) {
+              console.error('Fetch error creating deal:', err);
+            }
             const tokenInfoTr1 = await setHubSpotToken(getPortalId);
             const ACCESS_TOKEN_TR1 = tokenInfoTr1.access_token;
             const hubDbOptions = {
@@ -110,6 +299,27 @@ function dollars(amount, currency) {
             console.log(sub.metadata.email);
             console.log(sub.metadata.full_name);
             console.log(sub.metadata.product_name);
+            const tokenInfoDeal2 = await setHubSpotToken(getPortalId);
+            const ACCESS_TOKEN_DEAL2 = tokenInfoDeal2.access_token;
+            const createDealOptions = {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${ACCESS_TOKEN_DEAL2}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(dealBody)
+            };
+            try {
+              const dealRes = await fetch(createDealUrl, createDealOptions);
+              const dealData = await dealRes.json();
+              if (!dealRes.ok) {
+                console.error('Deal create failed:', dealRes.status, dealData);
+              } else {
+                console.log('Trial Deal created');
+              }
+            } catch (err) {
+              console.error('Fetch error creating deal:', err);
+            }
             const tokenInfoAct1 = await setHubSpotToken(getPortalId);
             const ACCESS_TOKEN_ACT1 = tokenInfoAct1.access_token;
             const hubDbOptions = {
