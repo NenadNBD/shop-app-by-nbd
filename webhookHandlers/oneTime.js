@@ -114,11 +114,12 @@ module.exports = {
       getFullName = String(meta.fullName || '').trim();
       getProductName = String(meta.productName || '').trim();
       const charge  = piCharge.latest_charge || null;
-        const billing = charge?.billing_details || {};
-        if(billing){
-          getEmail =  String(billing.email).trim();
-        }
-        getAmount = Number((pi.amount / 100).toFixed(2));
+      const billing = charge?.billing_details || {};
+      if(billing){
+        getEmail =  String(billing.email).trim();
+      }
+      getAmount = Number((pi.amount / 100).toFixed(2));
+      console.log('Event Emial:', getEmail);
 
       // Search for Contact ID
       const tokenInfo01 = await setHubSpotToken(getPortalId);
@@ -136,6 +137,8 @@ module.exports = {
           getState = '';
         }
       }
+
+      console.log('Event Contact ID:', getContactId);
 
       // Search for Company if Payer Type is COMPANY
       if(getPayerType === 'company'){
