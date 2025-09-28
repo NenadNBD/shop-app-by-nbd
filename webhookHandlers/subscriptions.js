@@ -113,12 +113,13 @@ function dollars(amount, currency) {
           }
           // Search for Company if Payer Type is COMPANY
           if(String(sub.metadata.payer_type).trim() === 'company'){
-            const companyName = String(sub.metadata.company || '').trim().toLowerCase();
+            const companyName = String(sub.metadata.company || '').trim();
+            const companyNameToSearch = companyName.toLowerCase();
             const emailForCompany = String(sub.metadata.email || '').trim();
             const domain = (emailForCompany.includes('@') ? emailForCompany.split('@')[1] : '').toLowerCase();
             const tokenInfo02 = await setHubSpotToken(getPortalId);
             const ACCESS_TOKEN02 = tokenInfo02.access_token;
-            const company = await searchCompanyByNameOrDomain(ACCESS_TOKEN02, { name: companyName, domain });
+            const company = await searchCompanyByNameOrDomain(ACCESS_TOKEN02, { name: companyNameToSearch, domain });
             if (company) {
               getCompanyId = company.hs_object_id;
               console.log('Company found:', company.name);
