@@ -40,22 +40,8 @@ const searchCompanyByNameOrDomain = async (accessToken, { name, domain }) => {
   try {
     const response = await axios.post('https://api.hubapi.com/crm/v3/objects/companies/search', {
       filterGroups: [
-        {
-          filters: [
-            {
-              propertyName: 'name',
-              operator: 'EQ',
-              value: name
-            }
-          ],
-          filters: [
-            {
-              propertyName: 'domain',
-              operator: 'EQ',
-              value: domain
-            }
-          ]
-        }
+        { filters: [{ propertyName: 'name', operator: 'EQ', value: name }] },
+        { filters: [{ propertyName: 'domain', operator: 'EQ', value: domain }] }
       ],
       limit: 1,
       properties: ['hs_object_id']

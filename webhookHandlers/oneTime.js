@@ -1,3 +1,4 @@
+const { retryFor } = require('../utils/retry');
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
@@ -43,22 +44,8 @@ const searchCompanyByNameOrDomain = async (accessToken, { name, domain }) => {
   try {
     const response = await axios.post('https://api.hubapi.com/crm/v3/objects/companies/search', {
       filterGroups: [
-        {
-          filters: [
-            {
-              propertyName: 'name',
-              operator: 'EQ',
-              value: name
-            }
-          ],
-          filters: [
-            {
-              propertyName: 'domain',
-              operator: 'EQ',
-              value: domain
-            }
-          ]
-        }
+        { filters: [{ propertyName: 'name', operator: 'EQ', value: name }] },
+        { filters: [{ propertyName: 'domain', operator: 'EQ', value: domain }] }
       ],
       limit: 1,
       properties: ['hs_object_id']
@@ -124,7 +111,12 @@ module.exports = {
       // Search for Contact ID
       const tokenInfo01 = await setHubSpotToken(getPortalId);
       const ACCESS_TOKEN01 = tokenInfo01.access_token;
-      const contact = await searchContactByEmail(ACCESS_TOKEN01, getEmail);
+
+      // Try to find the contact for up to ~7 seconds
+      const contact = await retryFor(
+        () => searchContactByEmail(ACCESS_TOKEN01, getEmail),
+        { maxMs: 7000, shouldRetry: (err, out) => !err && !out }
+      );
       if (contact) {
         getContactId = String(contact.hs_object_id);
         getAddress = String(contact.address || '').trim();

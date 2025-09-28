@@ -23,57 +23,59 @@ router.post('/webhooks/stripe', express.raw({ type: 'application/json' }), async
   // Ack fast (Stripe will retry if non-2xx)
   res.status(200).send('ok');
 
-  try {
-    switch (event.type) {
-      // ONE-TIME + DONATIONS (PaymentIntent based)
-      case 'payment_intent.succeeded': {
-        const pi = event.data.object;
-        const category = (pi.metadata?.category || '').toLowerCase();
-        if (category === 'donation') {
-          await donationOneTimeHandlers.onSucceeded(pi);
-        } else {
-          await oneTimeHandlers.onSucceeded(pi);
+  setImmediate(async () => {
+    try {
+      switch (event.type) {
+        // ONE-TIME + DONATIONS (PaymentIntent based)
+        case 'payment_intent.succeeded': {
+          const pi = event.data.object;
+          const category = (pi.metadata?.category || '').toLowerCase();
+          if (category === 'donation') {
+            await donationOneTimeHandlers.onSucceeded(pi);
+          } else {
+            await oneTimeHandlers.onSucceeded(pi);
+          }
+          break;
         }
-        break;
-      }
-      case 'payment_intent.payment_failed': {
-        const pi = event.data.object;
-        const category = (pi.metadata?.category || '').toLowerCase();
-        if (category === 'donation') {
-          await donationOneTimeHandlers.onFailed(pi);
-        } else {
-          await oneTimeHandlers.onFailed(pi);
+        case 'payment_intent.payment_failed': {
+          const pi = event.data.object;
+          const category = (pi.metadata?.category || '').toLowerCase();
+          if (category === 'donation') {
+            await donationOneTimeHandlers.onFailed(pi);
+          } else {
+            await oneTimeHandlers.onFailed(pi);
+          }
+          break;
         }
-        break;
+
+        // SUBSCRIPTIONS (Invoice/Subscription based)
+        case 'customer.subscription.created':
+        case 'customer.subscription.updated':
+        case 'customer.subscription.deleted':
+        case 'customer.subscription.paused':
+        case 'customer.subscription.resumed':
+          await subsHandlers.onSubscriptionEvent(event);
+          break;
+
+        case 'invoice.payment_succeeded':
+        case 'invoice.payment_failed':
+        case 'invoice.payment_action_required':
+          await subsHandlers.onInvoiceEvent(event);
+          break;
+
+        case 'customer.subscription.trial_will_end':
+          await subsHandlers.onTrialWillEnd(event);
+          break;
+
+        default:
+          // ignore others for now
+          break;
       }
-
-      // SUBSCRIPTIONS (Invoice/Subscription based)
-      case 'customer.subscription.created':
-      case 'customer.subscription.updated':
-      case 'customer.subscription.deleted':
-      case 'customer.subscription.paused':
-      case 'customer.subscription.resumed':
-        await subsHandlers.onSubscriptionEvent(event);
-        break;
-
-      case 'invoice.payment_succeeded':
-      case 'invoice.payment_failed':
-      case 'invoice.payment_action_required':
-        await subsHandlers.onInvoiceEvent(event);
-        break;
-
-      case 'customer.subscription.trial_will_end':
-        await subsHandlers.onTrialWillEnd(event);
-        break;
-
-      default:
-        // ignore others for now
-        break;
+    } catch (err) {
+      console.error('Webhook handler error:', err);
+      // You already returned 200, so just log/alert here
     }
-  } catch (err) {
-    console.error('Webhook handler error:', err);
-    // You already returned 200, so just log/alert here
-  }
+  });
 });
 
 module.exports = router;
