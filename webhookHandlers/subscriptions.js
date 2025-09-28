@@ -1,4 +1,5 @@
 // handlers/subscriptions.js
+const { retryFor } = require('../utils/retry');
 const axios = require('axios');
 const setHubSpotToken = require('../database/getTokens');
 
@@ -87,7 +88,11 @@ function dollars(amount, currency) {
           getPortalId = String(sub.metadata.hsPortalId).trim();
           const tokenInfo01 = await setHubSpotToken(getPortalId);
           const ACCESS_TOKEN01 = tokenInfo01.access_token;
-          const contact = await searchContactByEmail(ACCESS_TOKEN01, String(sub.metadata.email).trim());
+          // Try to find the contact for up to ~7 seconds
+          const contact = await retryFor(
+            () => searchContactByEmail(ACCESS_TOKEN01, String(sub.metadata.email).trim()),
+            { maxMs: 7000, shouldRetry: (err, out) => !err && !out }
+          );
           if (contact) {
               getContactId = contact.hs_object_id;
               getContactAddress = contact.address;
