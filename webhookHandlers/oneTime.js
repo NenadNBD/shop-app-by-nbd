@@ -85,12 +85,14 @@ module.exports = {
       let getAmount;
       let getContactId;
       let getCompanyId;
+      let getHsProductId;
       const piCharge = await stripe.paymentIntents.retrieve(pi.id, {
         expand: ['latest_charge', 'payment_method']
       });
       const meta = pi.metadata || {};
       getPortalId = String(meta.hsPortalId || '').trim();
       getPayerType = String(meta.payerType || '').trim().toLowerCase();
+      getHsProductId = String(meta.hsProductId || '').trim();
       if(getPayerType === 'individual'){
         getCompanyName = '';
       }else if(getPayerType === 'company'){
