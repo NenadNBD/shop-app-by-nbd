@@ -327,7 +327,7 @@ module.exports = {
         apple_pay: 'Apple Pay',
         us_bank_account: 'US Bank Account'
       };
-      const createInvoiceBody = {
+      const invoiceBody = {
         properties: {
           invoice_year: invoiceYear,
           invoice_number_sufix: setInvoiceSuffix,
@@ -351,9 +351,31 @@ module.exports = {
           bill_to_country: getCountry,
         }
       };
-
       console.log('Invoice Body:');
-      console.log(createInvoiceBody.properties);
+      console.log(invoiceBody.properties);
+
+      const createInvoiceUrl = 'https://api.hubapi.com/crm/v3/objects/2-192773368';
+      const tokenInv02 = await setHubSpotToken(getPortalId);
+      const ACCESS_TOKEN_INV_02 = tokenInv02.access_token;
+      const createInvoiceOptions = {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN_INV_02}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(invoiceBody)
+      };
+      try {
+        const invoiceRes = await fetch(createInvoiceUrl, createInvoiceOptions);
+        const invoiceData = await invoiceRes.json();
+        if (!invoiceRes.ok) {
+          console.error('Invoice create failed:', invoiceRes.status, invoiceData);
+        } else {
+          console.log('Deal created');
+        }
+      } catch (err) {
+        console.error('Fetch error creating deal:', err);
+      }
 
     },
     async onFailed(pi) {
