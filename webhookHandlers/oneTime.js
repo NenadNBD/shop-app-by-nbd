@@ -314,7 +314,10 @@ module.exports = {
       const setInvoiceSuffix = lastInvoiceSuffix != null ? lastInvoiceSuffix + 1 : startSuffix;
 
       // 2 Create Invoice Body
-      const invoiceDate = Date.now();
+      const todayUtcMidnightMs = () => {
+        const now = new Date();
+        return Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()); // 00:00:00.000 UTC
+      };
       let setBillToName;
       if(getPayerType === 'company'){
         setBillToName = getCompanyName;
@@ -332,8 +335,8 @@ module.exports = {
           invoice_year: invoiceYear,
           invoice_number_sufix: setInvoiceSuffix,
           invoice_number: `INV-${invoiceYear}-${setInvoiceSuffix}`,
-          issue_date: invoiceDate,
-          due_date: invoiceDate,
+          issue_date: todayUtcMidnightMs(),
+          due_date: todayUtcMidnightMs(),
           status: 'Paid',
           statement_descriptor: 'Stripe',
           transaction_type: 'Purchase',
