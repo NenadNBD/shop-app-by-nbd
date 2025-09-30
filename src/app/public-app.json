@@ -9,7 +9,7 @@
     "crm.objects.users.read", "settings.users.read", "settings.users.teams.read", 
     "crm.objects.companies.read", "crm.objects.companies.write", "crm.schemas.companies.read", "crm.schemas.companies.write", 
     "crm.objects.deals.read", "crm.objects.deals.write", "crm.schemas.deals.read", "crm.schemas.deals.write", 
-    "crm.objects.products.read", "crm.objects.products.write", "crm.objects.invoices.read", "crm.objects.invoices.write", "crm.schemas.invoices.read", "crm.schemas.invoices.write", 
+    "crm.objects.products.read", "crm.objects.products.write", "crm.objects.custom.read", "crm.objects.custom.write", "files", "files.ui_hidden.read", "forms-uploaded-files", 
     "hubdb", "crm.objects.line_items.read", "crm.objects.line_items.write", "tax_rates.read"],
     "optionalScopes": [],
     "conditionallyRequiredScopes": []
