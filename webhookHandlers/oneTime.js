@@ -1,5 +1,3 @@
-const { retryFor } = require('../utils/retry');
-const { countryName, usStateName, resolveBillTo } = require('../utils/geo');
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
@@ -83,7 +81,7 @@ const searchInvoicesByYear = async (accessToken, invoice_year) => {
         }
       ],
       properties: ['invoice_number_sufix'],
-      sorts: [{ "propertyName": "invoice_suffix", "direction": "DESCENDING" }],
+      sorts: [{ "propertyName": "invoice_number_sufix", "direction": "DESCENDING" }],
       limit: 1
     }, {
       headers: {
@@ -94,7 +92,7 @@ const searchInvoicesByYear = async (accessToken, invoice_year) => {
     const result = response.data?.results?.[0];
     if (!result) return null;
 
-    const last = Number(result.properties?.invoice_suffix);
+    const last = Number(result.properties?.invoice_number_sufix);
     return Number.isFinite(last) ? last : null;
   } catch (error) {
     console.error('Error:', error.response?.data || error.message);
@@ -162,7 +160,7 @@ module.exports = {
         getCity = String(contact.city || '').trim();
         getZip = String(contact.zip || '').trim();
         getCountry = String(contact.country || '').trim();
-        if(getCountry === 'US'){
+        if(getCountry === 'United States'){
           getState = String(contact.state || '').trim();
         }else{
           getState = '';
@@ -310,7 +308,7 @@ module.exports = {
       const ACCESS_TOKEN_INV_01 = tokenInv01.access_token;
       const invoiceYear = new Date().getFullYear();
       const startSuffix = 1000;
-      const lastInvoiceSuffix = await searchInvoicesByYear(ACCESS_TOKEN_INV_01, { invoice_year: invoiceYear });
+      const lastInvoiceSuffix = await searchInvoicesByYear(ACCESS_TOKEN_INV_01, invoiceYear);
       console.log(lastInvoiceSuffix);
       const setInvoiceSuffix = lastInvoiceSuffix != null ? lastInvoiceSuffix + 1 : startSuffix;
 
@@ -328,9 +326,6 @@ module.exports = {
         apple_pay: 'Apple Pay',
         us_bank_account: 'US Bank Account'
       };
-      const setInvoiceCountry = String(getCountry || '').trim();
-      const setBillToCountry = countryName(setInvoiceCountry);                 // "US" -> "United States"
-      const setBillState   = setInvoiceCountry === 'US' ? usStateName(getState) : '';   // non-US => ''
       const createInvoiceBody = {
         properties: {
           invoice_year: invoiceYear,
@@ -351,8 +346,8 @@ module.exports = {
           bill_to_address: getAddress,
           bill_to_city: getCity,
           bill_to_postal_code: getZip,
-          bill_to_state: setBillState,
-          bill_to_country: setBillToCountry,
+          bill_to_state: getState,
+          bill_to_country: getCountry,
         }
       };
 
