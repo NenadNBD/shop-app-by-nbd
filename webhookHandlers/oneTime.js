@@ -49,7 +49,7 @@ const searchCompanyByNameOrDomain = async (accessToken, { name, domain }) => {
         { filters: [{ propertyName: 'domain', operator: 'EQ', value: domain }] }
       ],
       limit: 1,
-      properties: ['hs_object_id']
+      properties: ['hs_object_id', 'name']
     }, {
       headers: {
         'Content-Type': 'application/json',
@@ -92,6 +92,11 @@ const searchInvoicesByYear = async (accessToken, invoice_year) => {
         'Authorization': `Bearer ${accessToken}`
       }
     });
+    const result = response.data?.results?.[0];
+    if (!result) return null;
+
+    const last = Number(result.properties?.invoice_suffix);
+    return Number.isFinite(last) ? last : null;
   } catch (error) {
     console.error('Error:', error.response?.data || error.message);
     return null;
@@ -304,15 +309,9 @@ module.exports = {
       const tokenInv01 = await setHubSpotToken(getPortalId);
       const ACCESS_TOKEN_INV_01 = tokenInv01.access_token;
       const invoiceYear = new Date().getFullYear();
-      let getInvoiceSufix;
-      let setInvoiceSufix;
-      const invSufix = await searchInvoicesByYear(ACCESS_TOKEN_INV_01, { invoice_year: invoiceYear });
-      getInvoiceSufix = invSufix.data.results[0].properties.invoice_number_sufix;
-      if(getInvoiceSufix){
-        setInvoiceSufix = getInvoiceSufix + 1;
-      }else{
-        setInvoiceSufix = 1000;
-      }
+      const startSuffix = 1000;
+      const lastInvoiceSuffix = await searchInvoicesByYear(ACCESS_TOKEN_INV_01, { invoice_year: invoiceYear });
+      const setInvoiceSuffix = lastInvoiceSuffix != null ? lastInvoiceSuffix + 1 : startSuffix;
 
       // 2 Create Invoice Body
       const invoiceDate = Date.now();
@@ -334,8 +333,8 @@ module.exports = {
       const createInvoiceBody = {
         properties: {
           invoice_year: invoiceYear,
-          invoice_number_sufix: setInvoiceSufix,
-          invoice_number: `INV-${invoiceYear}-${setInvoiceSufix}`,
+          invoice_number_sufix: setInvoiceSuffix,
+          invoice_number: `INV-${invoiceYear}-${setInvoiceSuffix}`,
           issue_date: invoiceDate,
           due_date: invoiceDate,
           status: 'Paid',
