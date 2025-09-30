@@ -56,7 +56,6 @@ const searchCompanyByNameOrDomain = async (accessToken, { name, domain }) => {
         'Authorization': `Bearer ${accessToken}`
       }
     });
-
     if (response.data.results.length > 0) {
       return response.data.results[0].properties; // Returns the contact ID
     } else {
@@ -178,7 +177,8 @@ module.exports = {
         const domain = (getEmail.includes('@') ? getEmail.split('@')[1] : '').toLowerCase();
         const tokenInfo02 = await setHubSpotToken(getPortalId);
         const ACCESS_TOKEN02 = tokenInfo02.access_token;
-        const company = await searchCompanyByNameOrDomain(ACCESS_TOKEN02, { name: companyNameToSearch, domain });
+        const company = await searchCompanyByNameOrDomain(ACCESS_TOKEN02, { name: companyNameToSearch, domain: domain });
+        console.log(company);
         // Get Company ID if exists in HubSpot
         if (company) {
           getCompanyId = String(company.hs_object_id);
@@ -311,6 +311,7 @@ module.exports = {
       const invoiceYear = new Date().getFullYear();
       const startSuffix = 1000;
       const lastInvoiceSuffix = await searchInvoicesByYear(ACCESS_TOKEN_INV_01, { invoice_year: invoiceYear });
+      console.log(lastInvoiceSuffix);
       const setInvoiceSuffix = lastInvoiceSuffix != null ? lastInvoiceSuffix + 1 : startSuffix;
 
       // 2 Create Invoice Body
@@ -327,7 +328,7 @@ module.exports = {
         apple_pay: 'Apple Pay',
         us_bank_account: 'US Bank Account'
       };
-      const setInvoiceCountry = String(getCountry || '').trim().toUpperCase();
+      const setInvoiceCountry = String(getCountry || '').trim();
       const setBillToCountry = countryName(setInvoiceCountry);                 // "US" -> "United States"
       const setBillState   = setInvoiceCountry === 'US' ? usStateName(getState) : '';   // non-US => ''
       const createInvoiceBody = {
