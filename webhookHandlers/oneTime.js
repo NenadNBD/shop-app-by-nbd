@@ -1,4 +1,5 @@
 const { retryFor } = require('../utils/retry');
+const { countryName, usStateName, resolveBillTo } = require('../utils/geo');
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
@@ -67,6 +68,36 @@ const searchCompanyByNameOrDomain = async (accessToken, { name, domain }) => {
   }
 };
 
+// Utility Function to search Last Invoice Sufix
+const searchInvoicesByYear = async (accessToken, invoice_year) => {
+  try {
+    const response = await axios.post('https://api.hubapi.com/crm/v3/objects/2-192773368/search', {
+      filterGroups: [
+        {
+          filters: [
+            {
+              propertyName: 'invoice_year',
+              operator: 'EQ',
+              value: String(invoice_year)
+            }
+          ]
+        }
+      ],
+      properties: ['invoice_number_sufix'],
+      sorts: [{ "propertyName": "invoice_suffix", "direction": "DESCENDING" }],
+      limit: 1
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+  } catch (error) {
+    console.error('Error:', error.response?.data || error.message);
+    return null;
+  }
+};
+
 module.exports = {
     async onSucceeded(pi) {
       let getPortalId;
@@ -81,6 +112,7 @@ module.exports = {
       let getZip;
       let getCountry;
       let getState;
+      let getPaymentMethodType;
       let getProductName;
       let getAmount;
       let getContactId;
@@ -103,6 +135,7 @@ module.exports = {
       getFullName = String(meta.fullName || '').trim();
       getProductName = String(meta.productName || '').trim();
       const charge  = piCharge.latest_charge || null;
+      getPaymentMethodType = charge.payment_method_details.type;
       const billing = charge?.billing_details || {};
       if(billing){
         getEmail =  String(billing.email).trim();
@@ -266,6 +299,66 @@ module.exports = {
       } catch (err) {
         console.error('Fetch error creating deal:', err);
       }
+      // ----- Create Invoice Custom Object -----
+      // 1 Search previous Invoices to get Invoice Sufix
+      const tokenInv01 = await setHubSpotToken(getPortalId);
+      const ACCESS_TOKEN_INV_01 = tokenInv01.access_token;
+      const invoiceYear = new Date().getFullYear();
+      let getInvoiceSufix;
+      let setInvoiceSufix;
+      const invSufix = await searchInvoicesByYear(ACCESS_TOKEN_INV_01, { invoice_year: invoiceYear });
+      getInvoiceSufix = invSufix.data.results[0].properties.invoice_number_sufix;
+      if(getInvoiceSufix){
+        setInvoiceSufix = getInvoiceSufix + 1;
+      }else{
+        setInvoiceSufix = 1000;
+      }
+
+      // 2 Create Invoice Body
+      const invoiceDate = Date.now();
+      let setBillToName;
+      if(getPayerType === 'company'){
+        setBillToName = getCompanyName;
+      }else if(getPayerType === 'individual'){
+        setBillToName = getFullName;
+      }
+      const paymentMethodLabels = {
+        card: 'Card',
+        google_pay: 'GooglePay',   // as you prefer (no space)
+        apple_pay: 'Apple Pay',
+        us_bank_account: 'US Bank Account'
+      };
+      const setInvoiceCountry = String(getCountry || '').trim().toUpperCase();
+      const setBillToCountry = countryName(setInvoiceCountry);                 // "US" -> "United States"
+      const setBillState   = setInvoiceCountry === 'US' ? usStateName(getState) : '';   // non-US => ''
+      const createInvoiceBody = {
+        properties: {
+          invoice_year: invoiceYear,
+          invoice_number_sufix: setInvoiceSufix,
+          invoice_number: `INV-${invoiceYear}-${setInvoiceSufix}`,
+          issue_date: invoiceDate,
+          due_date: invoiceDate,
+          status: 'Paid',
+          statement_descriptor: 'Stripe',
+          transaction_type: 'Purchase',
+          payment_id: String(pi.id || ''),
+          payment_method: paymentMethodLabels[getPaymentMethodType] ?? getPaymentMethodType,
+          amount_subtotal: getAmount,
+          amount_due: getAmount,
+          amount_total: getAmount,
+          bill_to_name: setBillToName,
+          bill_to_email: getEmail,
+          bill_to_address: getAddress,
+          bill_to_city: getCity,
+          bill_to_postal_code: getZip,
+          bill_to_state: setBillState,
+          bill_to_country: setBillToCountry,
+        }
+      };
+
+      console.log('Invoice Body:');
+      console.log(createInvoiceBody.properties);
+
     },
     async onFailed(pi) {
       // Mark failed
