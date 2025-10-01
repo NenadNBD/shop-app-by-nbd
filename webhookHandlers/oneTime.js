@@ -342,6 +342,8 @@ module.exports = {
           transaction_type: 'Purchase',
           payment_id: String(pi.id || ''),
           payment_method: paymentMethodLabels[getPaymentMethodType] ?? getPaymentMethodType,
+          product: getProductName,
+          quantity: 1,
           amount_subtotal: getAmount,
           amount_due: getAmount,
           amount_total: getAmount,
