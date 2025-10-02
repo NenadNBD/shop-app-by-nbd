@@ -456,6 +456,7 @@ module.exports = {
       const createInvoiceUrl = 'https://api.hubapi.com/crm/v3/objects/2-192773368';
       const tokenInv02 = await setHubSpotToken(getPortalId);
       const ACCESS_TOKEN_INV_02 = tokenInv02.access_token;
+      let getInvoiceId;
       const createInvoiceOptions = {
         method: 'POST',
         headers: {
@@ -467,6 +468,7 @@ module.exports = {
       try {
         const invoiceRes = await fetch(createInvoiceUrl, createInvoiceOptions);
         const invoiceData = await invoiceRes.json();
+        getInvoiceId = invoiceData.id;
         if (!invoiceRes.ok) {
           console.error('Invoice create failed:', invoiceRes.status, invoiceData);
         } else {
@@ -475,21 +477,57 @@ module.exports = {
       } catch (err) {
         console.error('Fetch error creating deal:', err);
       }
+/*
+      const noteUrl = 'https://api.hubapi.com/crm/v3/objects/notes';
+      let createNoteBody = '<div style="" dir="auto" data-top-level="true"><p style="margin:0;"><strong><span style="color: #151E21;">INV-' + invoiceYear + '-' + setInvoiceSuffix + '</span></strong></p></div>';
+      const noteBody = {
+        properties: {
+          hs_timestamp: dealCloseDate,
+          hs_note_body: createNoteBody,
+          hubspot_owner_id: dealOwner,
+          hs_attachment_ids: getPdfId
+        },
+        associations: [
+          {
+            to: {
+              id: getInvoiceId
+            },
+            types: [
+              {
+                associationCategory: "HUBSPOT_DEFINED",
+                associationTypeId: 202
+              } 
+            ]
+          }
+        ]
+      };
+const noteOptions = {
+  method: 'POST',
+  headers: {Authorization: 'Bearer <token>', 'Content-Type': 'application/json'},
+  body: '{"associations":[{"types":[{"associationCategory":"HUBSPOT_DEFINED","associationTypeId":123}],"to":{"id":"<string>"}}],"properties":{}}'
+};
 
-      const testNoteUrl = 'https://api.hubapi.com/crm/v3/objects/notes/303013058807?associations=2-192773368';
-      const testNoteOptions = {method: 'GET', headers: {Authorization: `Bearer ${ACCESS_TOKEN_INV_02}`}};
+try {
+  const response = await fetch(url, options);
+  const data = await response.json();
+  console.log(data);
+} catch (error) {
+  console.error(error);
+}
+*/
 
-      try {
-        const response = await fetch(testNoteUrl, testNoteOptions);
-        const data = await response.json();
-        const first = data.associations['p146896786_shopapp_invoices']?.results?.[0];
-        console.log(first);
-        console.log('Note DATA TEST:');
-        console.log(data);
-      } catch (error) {
-        console.error(error);
-      }
+const url = `https://api.hubapi.com/crm/v4/associations/notes/p146896786_shopapp_invoices/labels`;
 
+const res = await fetch(url, {
+  method: 'GET',
+  headers: {
+    Authorization: `Bearer ${ACCESS_TOKEN_INV_02}`, // your HubSpot private app token
+    accept: 'application/json'
+  }
+});
+
+const json = await res.json();
+console.log(JSON.stringify(json, null, 2));
     },
     async onFailed(pi) {
       // Mark failed
