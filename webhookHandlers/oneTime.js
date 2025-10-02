@@ -476,7 +476,7 @@ module.exports = {
         console.error('Fetch error creating deal:', err);
       }
 
-      const testNoteUrl = 'https://api.hubapi.com/crm/v3/objects/notes/303013058807';
+      const testNoteUrl = 'https://api.hubapi.com/crm/v3/objects/notes/303013058807?associations=2-192773368';
       const testNoteOptions = {method: 'GET', headers: {Authorization: `Bearer ${ACCESS_TOKEN_INV_02}`}};
 
       try {
