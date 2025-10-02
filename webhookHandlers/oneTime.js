@@ -387,7 +387,7 @@ module.exports = {
       const overwrite = false;
 
       const createPdf = new FormData();
-      createPdf.append('file', new Blob([pdfBuffer], { type: 'application/pdf' }), fileName);
+      createPdf.append('file', pdfBuffer, { filename: fileName, contentType: 'application/pdf' });
       createPdf.append('fileName', fileName);
       createPdf.append('folderId', folderId);
       createPdf.append('options', JSON.stringify({ access, overwrite }));

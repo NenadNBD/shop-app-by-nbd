@@ -119,7 +119,7 @@ async function prepareInvoice(printInvoice) {
     const doubleTablePageW = doc.internal.pageSize.getWidth();
     const doubleTableW = doubleTablePageW - (margin * 2);
     const doubleTableGap = 30;
-    const doubleTableColW = (doubleTableW - doubleTableGap) / 2;
+    const doubleTableColW = Math.floor((doubleTableW - doubleTableGap) / 2) - 2;
     const invoiceInfoLeftRows = [
       [ `Issue Date: ${formatInvoiceDate(printInvoice.issue_date) ?? ''}`],
       [ `Due Date: ${formatInvoiceDate(printInvoice.due_date) ?? ''}`]
@@ -137,7 +137,7 @@ async function prepareInvoice(printInvoice) {
       margin: { left: margin},
       tableWidth: doubleTableColW,
       theme: 'grid',
-      styles: { cellPadding: 1, },
+      styles: { cellPadding: 1, overflow: 'linebreak'},
         bodyStyles: {
           cellPadding: { top: 1, right: 8, bottom: 1, left: 8 },
           font: 'helvetica', fontSize: 11, fontStyle: 'normal',
@@ -156,7 +156,7 @@ async function prepareInvoice(printInvoice) {
       margin: { left: margin + doubleTableColW + doubleTableGap},               // ← shifted by colW + GAP
       tableWidth: doubleTableColW,
       theme: 'grid',
-      styles: { cellPadding: 1, },
+      styles: { cellPadding: 1, overflow: 'linebreak' },
         bodyStyles: {
           cellPadding: { top: 1, right: 8, bottom: 1, left: 8 },
           font: 'helvetica', fontSize: 11, fontStyle: 'normal',
@@ -294,7 +294,10 @@ async function prepareInvoice(printInvoice) {
     });
     
     // Line Items Table
-    const widths = [0.40, 0.20, 0.20, 0.20].map(p => Math.round(p * doubleTableW));
+    const w0 = Math.floor(0.40 * doubleTableW);
+    const w1 = Math.floor(0.20 * doubleTableW);
+    const w2 = Math.floor(0.20 * doubleTableW);
+    const w3 = doubleTableW - (w0 + w1 + w2); // remainder fits page exactly
     // Build body Lineitem rows
     const lineItemBody = [];
     for (const li of printInvoice.line_items || []) {
@@ -332,7 +335,7 @@ async function prepareInvoice(printInvoice) {
       margin: { left: margin, right: margin },
       tableWidth: doubleTableW,
       theme: 'grid',
-      styles: { cellPadding: 1, },
+      styles: { cellPadding: 1, overflow: 'linebreak' },
         headStyles: {
           cellPadding: { top: 3, right: 8, bottom: 3, left: 8 },
           font: 'helvetica', fontSize: 11, fontStyle: 'bold',
@@ -348,10 +351,10 @@ async function prepareInvoice(printInvoice) {
       head: [['Description', 'Qty', 'Unit price', 'Amount']],
       body: lineItemBody,
       columnStyles: {
-        0: { cellWidth: widths[0] },                 // Description (left)
-        1: { cellWidth: widths[1], halign: 'right' },// Qty (right)
-        2: { cellWidth: widths[2], halign: 'right' },// Unit price (right)
-        3: { cellWidth: widths[3], halign: 'right' } // Amount (right)
+        0: { cellWidth: w0 },                 // Description (left)
+        1: { cellWidth: w1, halign: 'right' },// Qty (right)
+        2: { cellWidth: w2, halign: 'right' },// Unit price (right)
+        3: { cellWidth: w3, halign: 'right' } // Amount (right)
       },
       didParseCell: (d) => {
         if (d.section === 'head' && d.column.index > 0) {
