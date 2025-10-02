@@ -129,7 +129,7 @@ async function prepareInvoice(printInvoice) {
     // continue from here if needed:
     const topAfterInvoiceNumberTable = doc.lastAutoTable.finalY + 8;
     // LEFT (Invoice Data)
-    doc.autoTable({
+    autoTable(doc, {
       startY: topAfterInvoiceNumberTable,
       margin: { left: margin},
       tableWidth: doubleTableColW,
