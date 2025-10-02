@@ -405,7 +405,7 @@ module.exports = {
         body: createPdf,
       });
       
-      if (!resp.ok) {
+      if (!pdfResp.ok) {
         const errText = await pdfResp.text().catch(() => '');
         throw new Error(`HubSpot upload failed: ${pdfResp.status} ${pdfResp.statusText} ${errText}`);
       }
