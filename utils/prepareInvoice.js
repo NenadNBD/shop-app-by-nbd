@@ -307,7 +307,7 @@ async function prepareInvoice(printInvoice) {
       const liName = li.name ?? '';
       const qty = li.quantity ?? 1;
       const unit = money(li.unit_price ?? 0);
-      const amount = money((Number(unit) * Number(qty)));
+      const amount = money((li.unit_price * li.quantity));
       
       lineItemBody.push([
         // Description (name + optional description)
