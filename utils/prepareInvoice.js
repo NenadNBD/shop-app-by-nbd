@@ -409,9 +409,8 @@ async function prepareInvoice(printInvoice) {
       }
     });
     
-    // RETURN the PDF buffer
-    const buf = Buffer.from(doc.output('arraybuffer'));
-    return buf;
+    // RETURN the PDF
+    return doc.output('datauristring');
 }
 
 module.exports = { prepareInvoice };

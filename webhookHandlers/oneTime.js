@@ -379,42 +379,49 @@ module.exports = {
       };
 
       // 1 Build PDF (Buffer)
-      const pdfBuffer = await prepareInvoice(printInvoice);
+      const createPdf = new FormData();
+      const pdfDataUri = await prepareInvoice(printInvoice);
+      let pdfData = pdfDataUri.replaceAll("data:application/pdf;filename=generated.pdf;base64,","");
+      pdfData = pdfData.replaceAll('"', '');
+      const buffer = Buffer.from(pdfData, "base64")
 
       // 2 Upload to HubSpot Files using folderId
       const fileName = `INV-${invoiceYear}-${setInvoiceSuffix}.pdf`;
-      const folderId = '282220027069'; // <- your target folder
-      const access = 'PUBLIC_NOT_INDEXABLE'; // or 'PRIVATE' / 'PUBLIC_INDEXABLE'
-      const overwrite = false;
-
-      const createPdf = new FormData();
       createPdf.append('fileName', fileName);
-      createPdf.append('folderId', folderId);
-      createPdf.append('options', JSON.stringify({ access, overwrite }));
-      const filePart = new Blob([pdfBuffer], { type: 'application/pdf' });
-      createPdf.append('file', filePart, fileName);
-
-      const uplodFileUrl = 'https://api.hubapi.com/files/v3/files';
+      createPdf.append('file', buffer, fileName);
+      createPdf.append('options', JSON.stringify({
+        "access":  "PUBLIC_NOT_INDEXABLE",
+        "overwrite": false
+      }));
+      createPdf.append('folderId', '282220027069');
+      
+      /* INSERT PDF INTO FILES */
       const tokenPdf01 = await setHubSpotToken(getPortalId);
       const ACCESS_TOKEN_PDF_01 = tokenPdf01.access_token;
-
-      const pdfResp = await fetch(uplodFileUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${ACCESS_TOKEN_PDF_01}`,
-          accept: 'application/json',
-        },
-        body: createPdf,
+      const client =  axios.create({
+        baseURL: 'https://api.hubapi.com',
+        headers: { 
+          accept: 'application/json', 
+          Authorization: `Bearer ${ACCESS_TOKEN_PDF_01}`
+        }
       });
       
-      if (!pdfResp.ok) {
-        const errText = await pdfResp.text().catch(() => '');
-        throw new Error(`HubSpot upload failed: ${pdfResp.status} ${pdfResp.statusText} ${errText}`);
-      }
+      let getPdfId;
+      let getPdfUrl;
 
-      const { id: hubspotFileId, url: hubspotFileUrl } = await pdfResp.json();
-      console.log(hubspotFileId);
-      console.log(hubspotFileUrl);
+      try {
+        const ApiResponse2 = await client.post('/files/v3/files', createPdf, {
+          headers: createPdf.getHeaders()
+        });
+        getPdfId = ApiResponse2.data.id;
+        getPdfUrl = ApiResponse2.data.url;
+      } catch (err) {
+        console.error(err);
+        throw err;
+      }
+      console.log('File uploaded!');
+      console.log(getPdfId);
+      console.log(getPdfUrl);
 
 
       const invoiceBody = {
