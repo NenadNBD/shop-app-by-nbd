@@ -380,6 +380,9 @@ module.exports = {
 
       // 1 Build PDF (Buffer)
       const pdfBuffer = await Promise.resolve(prepareInvoice(printInvoice));
+      if (!Buffer.isBuffer(pdfBuffer) || pdfBuffer.length === 0) {
+        throw new Error('PDF buffer missing/empty');
+      }
       // 2 Upload to HubSpot Files using folderId
       const fileName = `INV-${invoiceYear}-${setInvoiceSuffix}.pdf`;
       const folderId = '282220027069'; // <- your target folder
@@ -387,10 +390,10 @@ module.exports = {
       const overwrite = false;
 
       const createPdf = new FormData();
-      createPdf.append('file', pdfBuffer, fileName);
       createPdf.append('fileName', fileName);
       createPdf.append('folderId', folderId);
       createPdf.append('options', JSON.stringify({ access, overwrite }));
+      createPdf.append('file', pdfBuffer, { filename: fileName, contentType: 'application/pdf' });
 
       const uplodFileUrl = 'https://api.hubapi.com/files/v3/files';
       const tokenPdf01 = await setHubSpotToken(getPortalId);
@@ -401,6 +404,7 @@ module.exports = {
         headers: {
           Authorization: `Bearer ${ACCESS_TOKEN_PDF_01}`,
           accept: 'application/json',
+          ...createPdf.getHeaders(),
         },
         body: createPdf,
       });
