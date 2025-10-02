@@ -578,6 +578,7 @@ module.exports = {
       const updateContactWithPdfUrl = 'https://api.hubapi.com/crm/v3/objects/contacts/' + getContactId;
       const updateContactWithPdfBody = {
         properties: {
+          invoice_number: String('INV-' + invoiceYear + '-' + setInvoiceSuffix),
           invoice_pdf_url: getPdfUrl,
           invoice_pdf_id: getPdfId
         },
