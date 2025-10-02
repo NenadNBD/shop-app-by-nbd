@@ -404,7 +404,6 @@ module.exports = {
         headers: {
           Authorization: `Bearer ${ACCESS_TOKEN_PDF_01}`,
           accept: 'application/json',
-          ...createPdf.getHeaders(),
         },
         body: createPdf,
       });
