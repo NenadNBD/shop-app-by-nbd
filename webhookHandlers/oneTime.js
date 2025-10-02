@@ -482,9 +482,10 @@ module.exports = {
       try {
         const response = await fetch(testNoteUrl, testNoteOptions);
         const data = await response.json();
+        const first = data.associations['p146896786_shopapp_invoices']?.results?.[0];
+        console.log(first);
         console.log('Note DATA TEST:');
         console.log(data);
-        console.log(data.associations.results[0]);
       } catch (error) {
         console.error(error);
       }
