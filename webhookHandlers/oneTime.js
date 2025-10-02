@@ -477,7 +477,6 @@ module.exports = {
       } catch (err) {
         console.error('Fetch error creating deal:', err);
       }
-/*
       const noteUrl = 'https://api.hubapi.com/crm/v3/objects/notes';
       let createNoteBody = '<div style="" dir="auto" data-top-level="true"><p style="margin:0;"><strong><span style="color: #151E21;">INV-' + invoiceYear + '-' + setInvoiceSuffix + '</span></strong></p></div>';
       const noteBody = {
@@ -494,40 +493,33 @@ module.exports = {
             },
             types: [
               {
-                associationCategory: "HUBSPOT_DEFINED",
-                associationTypeId: 202
+                associationCategory: "USER_DEFINED",
+                associationTypeId: 14
               } 
             ]
           }
         ]
       };
-const noteOptions = {
-  method: 'POST',
-  headers: {Authorization: 'Bearer <token>', 'Content-Type': 'application/json'},
-  body: '{"associations":[{"types":[{"associationCategory":"HUBSPOT_DEFINED","associationTypeId":123}],"to":{"id":"<string>"}}],"properties":{}}'
-};
-
-try {
-  const response = await fetch(url, options);
-  const data = await response.json();
-  console.log(data);
-} catch (error) {
-  console.error(error);
-}
-*/
-
-const url = `https://api.hubapi.com/crm/v4/associations/notes/p146896786_shopapp_invoices/labels`;
-
-const res = await fetch(url, {
-  method: 'GET',
-  headers: {
-    Authorization: `Bearer ${ACCESS_TOKEN_INV_02}`, // your HubSpot private app token
-    accept: 'application/json'
-  }
-});
-
-const json = await res.json();
-console.log(JSON.stringify(json, null, 2));
+      const tokenNote01 = await setHubSpotToken(getPortalId);
+      const ACCESS_TOKEN_NOTE_01 = tokenNote01.access_token;
+      const createNoteOptions = {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN_NOTE_01}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(noteBody)
+      };
+      
+      try {
+        const noteResponse = await fetch(noteUrl, createNoteOptions);
+        const noteData = await noteResponse.json();
+        if(noteData){
+          console.log('Note is created and associated with Invoice PDF to Invoice Object');
+        }
+      } catch (error) {
+        console.error(error);
+      }
     },
     async onFailed(pi) {
       // Mark failed
