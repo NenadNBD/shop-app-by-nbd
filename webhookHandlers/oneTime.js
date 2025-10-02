@@ -3,6 +3,8 @@ const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
 const setHubSpotToken = require('../database/getTokens');
+const { prepareInvoice } = require('../utils/prepareInvoice');
+const FormData = require('form-data');
 
 // Utility Function to search Contact
 const searchContactByEmail = async (accessToken, email) => {
@@ -101,6 +103,14 @@ const searchInvoicesByYear = async (accessToken, invoice_year) => {
   }
 };
 
+
+// Convert Stripe's seconds timestamp to a HubSpot date picker value
+function stripeSecondsToHubSpotDatePicker(seconds) {
+  const d = new Date(seconds * 1000); // seconds -> ms
+  // Build midnight UTC for that calendar date
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
 module.exports = {
     async onSucceeded(pi) {
       let getPortalId;
@@ -116,6 +126,7 @@ module.exports = {
       let getCountry;
       let getState;
       let getPaymentMethodType;
+      let getPaymentDate;
       let getProductName;
       let getAmount;
       let getContactId;
@@ -139,6 +150,7 @@ module.exports = {
       getProductName = String(meta.productName || '').trim();
       const charge  = piCharge.latest_charge || null;
       getPaymentMethodType = charge.payment_method_details.type;
+      getPaymentDate = charge.created;
       const billing = charge?.billing_details || {};
       if(billing){
         getEmail =  String(billing.email).trim();
@@ -303,7 +315,7 @@ module.exports = {
       } catch (err) {
         console.error('Fetch error creating deal:', err);
       }
-      // ----- Create Invoice Custom Object -----
+      // ----- Create Invoice PDF and Invoice Custom Object -----
       // 1 Search previous Invoices to get Invoice Sufix
       const tokenInv01 = await setHubSpotToken(getPortalId);
       const ACCESS_TOKEN_INV_01 = tokenInv01.access_token;
@@ -314,10 +326,6 @@ module.exports = {
       const setInvoiceSuffix = lastInvoiceSuffix != null ? lastInvoiceSuffix + 1 : startSuffix;
 
       // 2 Create Invoice Body
-      const todayUtcMidnightMs = () => {
-        const now = new Date();
-        return Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()); // 00:00:00.000 UTC
-      };
       let setBillToName;
       if(getPayerType === 'company'){
         setBillToName = getCompanyName;
@@ -330,13 +338,90 @@ module.exports = {
         apple_pay: 'Apple Pay',
         us_bank_account: 'US Bank Account'
       };
+
+
+      const printInvoice = {
+        invoice_number: `INV-${invoiceYear}-${setInvoiceSuffix}`,
+        issue_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
+        due_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
+        statement_descriptor: "Stripe",
+        payment_id: String(pi.id || ''),
+        payment_method: paymentMethodLabels[getPaymentMethodType] ?? getPaymentMethodType,
+        status: "Paid",
+        subtotal: getAmount,
+        tax: 0.00,
+        total: getAmount,
+        amount_paid: getAmount,
+        balance_due: 0.00,
+        seller: {
+          name: "No Bounds Digital",
+          address_line1: "328 W High St",
+          city: "Elizabethtown",
+          state: "Pennsylvania",
+          postal_code: "17022",
+          country: "United States",
+          email: "nenad@noboundsdigital"
+        },
+        bill_to: {
+          name: setBillToName,
+          email: getEmail,
+          address_line1: getAddress,
+          city: getCity,
+          state: getState,
+          postal_code: getZip,
+          country: getCountry
+        },
+        line_items: [
+          { name: getProductName, quantity: 1, unit_price: getAmount, type: 'purchase', billing_cycle: 'September 30 2025 - October 30 2025' },
+          // { name: "Support", description: "Sep 28–Oct 28", quantity: 1, unit_price: 49.00 },
+        ],
+        // You can compute these or pass them precomputed
+      };
+
+      // 1 Build PDF (Buffer)
+      const pdfBuffer = await Promise.resolve(prepareInvoice(printInvoice));
+      // 2 Upload to HubSpot Files using folderId
+      const fileName = `INV-${invoiceYear}-${setInvoiceSuffix}.pdf`;
+      const folderId = '282220027069'; // <- your target folder
+      const access = 'PUBLIC_NOT_INDEXABLE'; // or 'PRIVATE' / 'PUBLIC_INDEXABLE'
+      const overwrite = false;
+
+      const createPdf = new FormData();
+      createPdf.append('file', pdfBuffer, fileName);
+      createPdf.append('fileName', fileName);
+      createPdf.append('folderId', folderId);
+      createPdf.append('options', JSON.stringify({ access, overwrite }));
+
+      const uplodFileUrl = 'https://api.hubapi.com/files/v3/files';
+      const tokenPdf01 = await setHubSpotToken(getPortalId);
+      const ACCESS_TOKEN_PDF_01 = tokenPdf01.access_token;
+
+      const pdfResp = await fetch(uplodFileUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN_PDF_01}`,
+          accept: 'application/json',
+        },
+        body: form,
+      });
+      
+      if (!resp.ok) {
+        const errText = await pdfResp.text().catch(() => '');
+        throw new Error(`HubSpot upload failed: ${pdfResp.status} ${pdfResp.statusText} ${errText}`);
+      }
+
+      const { id: hubspotFileId, url: hubspotFileUrl } = await pdfResp.json();
+      console.log(hubspotFileId);
+      console.log(hubspotFileUrl);
+
+
       const invoiceBody = {
         properties: {
           invoice_year: invoiceYear,
           invoice_number_sufix: setInvoiceSuffix,
           invoice_number: `INV-${invoiceYear}-${setInvoiceSuffix}`,
-          issue_date: todayUtcMidnightMs(),
-          due_date: todayUtcMidnightMs(),
+          issue_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
+          due_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
           status: 'Paid',
           statement_descriptor: 'Stripe',
           transaction_type: 'Purchase',
