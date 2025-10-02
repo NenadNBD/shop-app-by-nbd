@@ -402,7 +402,7 @@ module.exports = {
           Authorization: `Bearer ${ACCESS_TOKEN_PDF_01}`,
           accept: 'application/json',
         },
-        body: form,
+        body: createPdf,
       });
       
       if (!resp.ok) {
