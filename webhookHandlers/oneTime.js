@@ -476,6 +476,18 @@ module.exports = {
         console.error('Fetch error creating deal:', err);
       }
 
+      const testNoteUrl = 'https://api.hubapi.com/crm/v3/objects/notes/303013058807';
+      const testNoteOptions = {method: 'GET', headers: {Authorization: `Bearer ${ACCESS_TOKEN_INV_02}`}};
+
+      try {
+        const response = await fetch(testNoteUrl, testNoteOptions);
+        const data = await response.json();
+        console.log('Note DATA TEST:');
+        console.log(data);
+      } catch (error) {
+        console.error(error);
+      }
+
     },
     async onFailed(pi) {
       // Mark failed

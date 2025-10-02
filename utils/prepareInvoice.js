@@ -195,6 +195,9 @@ async function prepareInvoice(printInvoice) {
     if(printInvoice.bill_to.name){
       billingRightRows.push(`${printInvoice.bill_to.name}`)
     }
+    if(printInvoice.bill_to.address_line1){
+      billingRightRows.push(`${printInvoice.bill_to.address_line1}`)
+    }
     const customerLocality = formatCityStatePostal({
       city: printInvoice.bill_to.city,
       state: printInvoice.bill_to.state,
@@ -275,7 +278,7 @@ async function prepareInvoice(printInvoice) {
     const paidInfoRows = [];
     paidInfoRows.push(`Status: ${printInvoice.status ?? ''}`);
     if (printInvoice.status === 'Paid') {
-      paidInfoRows.push(`${printInvoice.total} due ${formatInvoiceDate(printInvoice.issue_date)}`);
+      paidInfoRows.push(`${money(printInvoice.total)} due ${formatInvoiceDate(printInvoice.issue_date)}`);
     }
     autoTable(doc, {
       startY: nextFromBillingTable,
@@ -304,7 +307,7 @@ async function prepareInvoice(printInvoice) {
       const liName = li.name ?? '';
       const qty = li.quantity ?? 1;
       const unit = money(li.unit_price ?? 0);
-      const amount = (li.amount != null) ? money(li.amoun) : money((Number(unit) * Number(qty)));
+      const amount = money((Number(unit) * Number(qty)));
       
       lineItemBody.push([
         // Description (name + optional description)
