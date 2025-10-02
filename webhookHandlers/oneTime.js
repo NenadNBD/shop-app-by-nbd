@@ -339,7 +339,7 @@ module.exports = {
         us_bank_account: 'US Bank Account'
       };
 
-
+      // 3 Prepare Body to print Invoice PDF
       const printInvoice = {
         invoice_number: `INV-${invoiceYear}-${setInvoiceSuffix}`,
         issue_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
@@ -378,7 +378,7 @@ module.exports = {
         // You can compute these or pass them precomputed
       };
 
-      // 1 Build PDF (Buffer)
+      // 4 Build PDF (Buffer)
       const createPdf = new FormData();
       const pdfDataUri = await prepareInvoice(printInvoice);
       let pdfData = pdfDataUri.replaceAll("data:application/pdf;filename=generated.pdf;base64,","");
@@ -395,7 +395,7 @@ module.exports = {
       }));
       createPdf.append('folderId', '282220027069');
       
-      /* INSERT PDF INTO FILES */
+      // 5 INSERT PDF INTO FILES
       const tokenPdf01 = await setHubSpotToken(getPortalId);
       const ACCESS_TOKEN_PDF_01 = tokenPdf01.access_token;
       const client =  axios.create({
@@ -423,7 +423,7 @@ module.exports = {
       console.log(getPdfId);
       console.log(getPdfUrl);
 
-
+      // 6 Prepare Invoice Custom Object Body
       const invoiceBody = {
         properties: {
           invoice_year: invoiceYear,
@@ -453,6 +453,7 @@ module.exports = {
       console.log('Invoice Body:');
       console.log(invoiceBody.properties);
 
+      // 7 Create Invoice Custom Object Record
       const createInvoiceUrl = 'https://api.hubapi.com/crm/v3/objects/2-192773368';
       const tokenInv02 = await setHubSpotToken(getPortalId);
       const ACCESS_TOKEN_INV_02 = tokenInv02.access_token;
@@ -477,6 +478,8 @@ module.exports = {
       } catch (err) {
         console.error('Fetch error creating deal:', err);
       }
+
+      // 8 Create Note for Invoice Custom Object Record and associte to it Invoice PDF
       const noteUrl = 'https://api.hubapi.com/crm/v3/objects/notes';
       let createNoteBody = '<div style="" dir="auto" data-top-level="true"><p style="margin:0;"><strong><span style="color: #151E21;">INV-' + invoiceYear + '-' + setInvoiceSuffix + '</span></strong></p></div>';
       const noteBody = {
@@ -516,6 +519,85 @@ module.exports = {
         const noteData = await noteResponse.json();
         if(noteData){
           console.log('Note is created and associated with Invoice PDF to Invoice Object');
+        }
+      } catch (error) {
+        console.error(error);
+      }
+
+      //----- Associate Invoice Custom Object to Contact ---
+      const invoiceToContactUrl = 'https://api.hubapi.com/crm/v4/objects/2-192773368/' + getInvoiceId + '/associations/contacts/' + getContactId;
+      const tokenAssociation01 = await setHubSpotToken(getPortalId);
+      const ACCESS_TOKEN_ASSOCIATION_01 = tokenAssociation01.access_token;
+      const invoiceToContactOptions = {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN_ASSOCIATION_01}`, 
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify([
+          { associationCategory: 'USER_DEFINED', associationTypeId:26 }
+        ])
+      };
+      try {
+        const invoiceToContactRes = await fetch(invoiceToContactUrl, invoiceToContactOptions);
+        const invoiceToContactData = await invoiceToContactRes.json();
+        if(invoiceToContactData){
+          console.log('Invoice is associated to Contact');
+        }
+      } catch (error) {
+        console.error(error);
+      }
+
+      //----- Associate Invoice Custom Object to Company ---
+      if(getPayerType === 'company' && getCompanyId){
+        const invoiceToCompanyUrl = 'https://api.hubapi.com/crm/v4/objects/2-192773368/' + getInvoiceId + '/associations/companies/' + getCompanyId;
+        const tokenAssociation02 = await setHubSpotToken(getPortalId);
+        const ACCESS_TOKEN_ASSOCIATION_02 = tokenAssociation02.access_token;
+        const invoiceToCompanyOptions = {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${ACCESS_TOKEN_ASSOCIATION_02}`, 
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify([
+            { associationCategory: 'USER_DEFINED', associationTypeId:30 }
+          ])
+        };
+        try {
+          const invoiceToCompanyRes = await fetch(invoiceToCompanyUrl, invoiceToCompanyOptions);
+          const invoiceToCompanyData = await invoiceToCompanyRes.json();
+          if(invoiceToCompanyData){
+            console.log('Invoice is associated to Company');
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      //----- Update Contact with PDF data to send Marketing Email
+      const updateContactWithPdfUrl = 'https://api.hubapi.com/crm/v3/objects/contacts/' + getContactId;
+      const updateContactWithPdfBody = {
+        properties: {
+          invoice_pdf_url: getPdfUrl,
+          invoice_pdf_id: getPdfId
+        },
+      };
+      const tokenUpdateContactWithPdf = await setHubSpotToken(getPortalId);
+      const ACCESS_TOKEN_UPDATE_CONTACT_WITH_PDF = tokenUpdateContactWithPdf.access_token;
+      const updateContactWithPdfOptions = {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN_UPDATE_CONTACT_WITH_PDF}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updateContactWithPdfBody)
+      };
+
+      try {
+        const updateContactWithPdfRes = await fetch(updateContactWithPdfUrl, updateContactWithPdfOptions);
+        const updateContactWithPdfData = await updateContactWithPdfRes.json();
+        if(updateContactWithPdfData){
+          console.log('Contact is ready to send Invoice Marketing Email');
         }
       } catch (error) {
         console.error(error);
