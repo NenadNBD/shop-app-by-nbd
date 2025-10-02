@@ -1,5 +1,7 @@
 const { jsPDF } = require('jspdf');
-const autoTable = require('jspdf-autotable');
+// Normalize jspdf-autotable for both CJS/ESM builds
+let autoTable = require('jspdf-autotable');
+autoTable = autoTable && autoTable.default ? autoTable.default : autoTable;
 const { getLogoDataUrl } = require('./logoProvider');
 
 function formatInvoiceDate(ms) {
@@ -11,10 +13,6 @@ function formatInvoiceDate(ms) {
     timeZone: 'UTC', // ensure no timezone shifts
   }).format(d);
 }
-
-const money = (n) => new Intl.NumberFormat('en-US', {
-    style: 'currency', currency: printInvoice.currency || 'USD'
-  }).format(Number(n || 0));
 
 function formatCityStatePostal({ city, state, postal }) {
     const c = (city || '').trim();
@@ -73,7 +71,7 @@ function addHeader(doc, {
 }
 
 async function prepareInvoice(printInvoice) {
-    // Init jsPDF
+  // Init jsPDF
   const doc = new jsPDF({ unit: 'px', format: 'letter', orientation: 'portrait', compress: true });
   const pageWidth  = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -82,6 +80,11 @@ async function prepareInvoice(printInvoice) {
   const margin = 21;
   const headerHeight = 50;
 
+  // money formatter bound to invoice currency
+  const currency = printInvoice.currency || 'USD';
+  const money = (n) => new Intl.NumberFormat('en-US', {
+    style: 'currency', currency
+  }).format(Number(n || 0));
 
   const logoDataUrl = (await getLogoDataUrl());
 
@@ -402,6 +405,10 @@ async function prepareInvoice(printInvoice) {
         }
       }
     });
+    
+    // RETURN the PDF buffer
+    const buf = Buffer.from(doc.output('arraybuffer'));
+    return buf;
 }
 
 module.exports = { prepareInvoice };
