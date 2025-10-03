@@ -475,7 +475,9 @@ function formatInvoiceDate(ms) {
 
           // ----- Create Invoice PDF and Invoice Custom Object for ACTIVE SUBSCRIPTION -----
           // 1 Search previous Invoices to get Invoice Sufix
-          let getPortalId = String(invoice.metadata.hsPortalId || '').trim();
+          const getSubscriptionId = String(invoice.subscription || '');
+          const invSubscription = await stripe.subscriptions.retrieve(getSubscriptionId);
+          let getPortalId = String(invSubscription.metadata.hsPortalId || '').trim();
           const tokenInv01 = await setHubSpotToken(getPortalId);
           const ACCESS_TOKEN_INV_01 = tokenInv01.access_token;
           const invoiceYear = new Date().getFullYear();
@@ -486,8 +488,6 @@ function formatInvoiceDate(ms) {
 
           // 2 Create Invoice Body
           // 2-1 Get Subscription Detals
-          const getSubscriptionId = String(invoice.subscription || '');
-          const invSubscription = await stripe.subscriptions.retrieve(getSubscriptionId);
           let getInvPayerType = String(invSubscription.metadata.payer_type || '').trim();
           let getInvEmail = String(invSubscription.metadata.email || '').trim();
           let getInvFullName = String(invSubscription.metadata.full_name || '').trim();
