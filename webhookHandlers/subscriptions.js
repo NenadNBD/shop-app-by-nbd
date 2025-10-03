@@ -252,6 +252,7 @@ function formatInvoiceDate(ms) {
           }
 
           // Prepare Deal
+          /*
           const createDealUrl = 'https://api.hubapi.com/crm/v3/objects/0-3';
           let setDealStage;
           if (sub.status === 'trialing') {
@@ -293,8 +294,11 @@ function formatInvoiceDate(ms) {
           }
           const hubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows';
           const publishHubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/draft/publish';
-
+          */
+      
           // ----- TRIAL ---
+
+          /*
           if (sub.status === 'trialing') {
             const tokenInfoDeal1 = await setHubSpotToken(getPortalId);
             const ACCESS_TOKEN_DEAL1 = tokenInfoDeal1.access_token;
@@ -359,7 +363,10 @@ function formatInvoiceDate(ms) {
             } catch (error) {
             console.error(error);
             }
+
+            */
           // ----- ACTIVE ---
+/*
           } else if (sub.status === 'active') {
             const tokenInfoDeal2 = await setHubSpotToken(getPortalId);
             const ACCESS_TOKEN_DEAL2 = tokenInfoDeal2.access_token;
@@ -428,6 +435,7 @@ function formatInvoiceDate(ms) {
           } else if (sub.status === 'incomplete') {
             console.log('SUBSCRIPTION IS INCOMPLETE. WILL BE PAYED?');
           }
+          */
           break;
   
         case 'customer.subscription.updated':
