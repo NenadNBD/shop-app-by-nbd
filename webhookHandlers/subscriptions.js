@@ -4,6 +4,7 @@ const axios = require('axios');
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const setHubSpotToken = require('../database/getTokens');
+const { countryName, usStateName } = require('../utils/geo');
 const { prepareInvoice } = require('../utils/prepareInvoice');
 const FormData = require('form-data');
 
@@ -125,27 +126,43 @@ function formatInvoiceDate(ms) {
     // Lifecycle updates: trialing -> active -> past_due -> canceled …
     async onSubscriptionEvent(event) {
         let getContactId;
+        let getEmail;
+        let getFullName;
         let getAddress;
         let getCity;
         let getZip;
         let getState;
         let getCountry;
+        let getCompanyName;
         let getCompanyId;
         let getPortalId;
         let getPayerType;
+        let getProductName;
+        let getSripeCustomerId;
+        let getStripeSubscriptionId;
+        let getStripeSubscriptionStatus;
+        let getCurrentPeriodEnd;
       const sub = event.data.object;
       // sub.status: trialing | active | past_due | canceled | incomplete | incomplete_expired | unpaid | paused
       // sub.metadata.flow: 'trial' | 'pay_now' (if you set this on create)
       console.log('Monitor Subscription Creation');
       switch (event.type) {
         case 'customer.subscription.created':
-          getPortalId = String(sub.metadata.hsPortalId).trim();
-          getPayerType = String(sub.metadata.payer_type).trim();
+          getEmail = String(sub.metadata.email || '').trim();
+          getFullName = String(sub.metadata.full_name || '').trim();
+          getPortalId = String(sub.metadata.hsPortalId || '').trim();
+          getPayerType = String(sub.metadata.payer_type || '').trim();
+          getCompanyName = String(sub.metadata.company || '').trim();
+          getProductName = String(sub.metadata.product_name || '').trim();
+          getSripeCustomerId = String(sub.customer || '').trim();
+          getStripeSubscriptionId = String(sub.id || '').trim();
+          getStripeSubscriptionStatus = String(sub.status || '').trim();
+          getCurrentPeriodEnd = sub.current_period_end * 1000
           const tokenInfo01 = await setHubSpotToken(getPortalId);
           const ACCESS_TOKEN01 = tokenInfo01.access_token;
           // Try to find the contact for up to ~7 seconds
           const contact = await retryFor(
-            () => searchContactByEmail(ACCESS_TOKEN01, String(sub.metadata.email).trim()),
+            () => searchContactByEmail(ACCESS_TOKEN01, getEmail),
             { maxMs: 7000, shouldRetry: (err, out) => !err && !out }
           );
           if (contact) {
@@ -161,10 +178,9 @@ function formatInvoiceDate(ms) {
             }
           }
           // Search for Company if Payer Type is COMPANY
-          if(String(sub.metadata.payer_type).trim() === 'company'){
-            const companyName = String(sub.metadata.company || '').trim();
-            const companyNameToSearch = companyName.toLowerCase();
-            const emailForCompany = String(sub.metadata.email || '').trim();
+          if(getPayerType === 'company' && getCompanyName){
+            const companyNameToSearch = getCompanyName.toLowerCase();
+            const emailForCompany = getEmail;
             const domain = (emailForCompany.includes('@') ? emailForCompany.split('@')[1] : '').toLowerCase();
             const tokenInfo02 = await setHubSpotToken(getPortalId);
             const ACCESS_TOKEN02 = tokenInfo02.access_token;
@@ -181,8 +197,8 @@ function formatInvoiceDate(ms) {
               const isFree = FREE_EMAIL_DOMAINS.has(domain);
               // Build properties (send at least name or a non-freemal domain)
               const properties = {};
-              if (companyName){
-                properties.name = companyName;
+              if (getCompanyName){
+                properties.name = getCompanyName;
               }
               if (domain && !isFree){
                 properties.domain = domain;
@@ -244,10 +260,10 @@ function formatInvoiceDate(ms) {
             setDealStage = '3311151352';
           }
           let setDealName;
-          if(String(sub.metadata.payer_type).trim() === 'company'){
-            setDealName = sub.metadata.company + ' - ' + sub.metadata.product_name
-          }else if(String(sub.metadata.payer_type).trim() === 'individual'){
-            setDealName = sub.metadata.full_name + ' - ' + sub.metadata.product_name
+          if(getPayerType === 'company'){
+            setDealName = getCompanyName + ' - ' + getProductName;
+          }else if(getPayerType === 'individual'){
+            setDealName = getFullName + ' - ' + getProductName;
           }
           const dealCloseDate = Date.now();
           const dealOwner = '44516880';
@@ -263,14 +279,13 @@ function formatInvoiceDate(ms) {
             },
             associations: []
           };
-          const dealPayerType = String(sub.metadata.payer_type || '').trim().toLowerCase();
           if (getContactId) {
             dealBody.associations.push({
               to: { id: String(getContactId) },
               types: [{ associationCategory: 'USER_DEFINED', associationTypeId: 3 }]
             });
           }
-          if (dealPayerType === 'company' && getCompanyId) {
+          if (getPayerType === 'company' && getCompanyId) {
             dealBody.associations.push({
               to: { id: String(getCompanyId) },
               types: [{ associationCategory: 'USER_DEFINED', associationTypeId: 1 }]
@@ -312,13 +327,13 @@ function formatInvoiceDate(ms) {
                 },
                 body: JSON.stringify({
                   values: {
-                    contact_email: String(sub.metadata.email).trim(),
+                    contact_email: getEmail,
                     contact_id: getContactId,
-                    customer_id: String(sub.customer).trim(),
-                    subscription_id: String(sub.id).trim(),
-                    subscription_name: String(sub.metadata.product_name).trim(),
-                    subscription_status: { name: String(sub.status).trim(), type: 'option' },
-                    current_period_end: sub.current_period_end * 1000
+                    customer_id: getSripeCustomerId,
+                    subscription_id: getStripeSubscriptionId,
+                    subscription_name: getProductName,
+                    subscription_status: { name: getStripeSubscriptionStatus, type: 'option' },
+                    current_period_end: getCurrentPeriodEnd
                   }
                 })
             };
@@ -346,11 +361,6 @@ function formatInvoiceDate(ms) {
             }
           // ----- ACTIVE ---
           } else if (sub.status === 'active') {
-            console.log('ACTIVE SUBSCRIPTION CREATED WITH ID:', sub.id);
-            console.log('ACTIVE SUBSCRIPTION CREATED FOR CUSTOMER ID:', sub.customer);
-            console.log(sub.metadata.email);
-            console.log(sub.metadata.full_name);
-            console.log(sub.metadata.product_name);
             const tokenInfoDeal2 = await setHubSpotToken(getPortalId);
             const ACCESS_TOKEN_DEAL2 = tokenInfoDeal2.access_token;
             const createDealOptions = {
@@ -373,131 +383,6 @@ function formatInvoiceDate(ms) {
               console.error('Fetch error creating deal:', err);
             }
 
-            // ----- Create Invoice PDF and Invoice Custom Object for ACTIVE SUBSCRIPTION -----
-          // 1 Search previous Invoices to get Invoice Sufix
-          const tokenInv01 = await setHubSpotToken(getPortalId);
-          const ACCESS_TOKEN_INV_01 = tokenInv01.access_token;
-          const invoiceYear = new Date().getFullYear();
-          const startSuffix = 1000;
-          const lastInvoiceSuffix = await searchInvoicesByYear(ACCESS_TOKEN_INV_01, invoiceYear);
-          console.log(lastInvoiceSuffix);
-          const setInvoiceSuffix = lastInvoiceSuffix != null ? lastInvoiceSuffix + 1 : startSuffix;
-
-          // 2 Create Invoice Body
-          const activeInvoiceId = sub.latest_invoice;
-          let activeInvoice;
-          let getPaymentMethodType;
-          let getPaymentDate;
-          let getAmount;
-          if (activeInvoiceId) {
-            activeInvoice = await stripe.invoices.retrieve(activeInvoiceId, {
-              expand: ['payment_intent.latest_charge', 'payment_intent.charges.data.balance_transaction']
-            });
-          }
-          const activePi = activeInvoice.payment_intent;
-          const activeCharge = activePi?.latest_charge || null;
-          getPaymentMethodType = activeCharge.payment_method_details.type;
-          getPaymentDate = activeCharge.created;
-          getAmount = Number((activePi.amount / 100).toFixed(2));
-          let setBillToName;
-          if(getPayerType === 'company'){
-            setBillToName = String(sub.metadata.company).trim();
-          }else if(getPayerType === 'individual'){
-            setBillToName = String(sub.metadata.full_name).trim();
-          }
-          const paymentMethodLabels = {
-            card: 'Card',
-            google_pay: 'GooglePay',   // as you prefer (no space)
-            apple_pay: 'Apple Pay',
-            us_bank_account: 'US Bank Account'
-          };
-          let activeCurrentPeriodStart = stripeSecondsToHubSpotDatePicker(sub.items?.data?.[0]?.current_period_start);
-          let activeCurrentPeriodEnd = stripeSecondsToHubSpotDatePicker(sub.items?.data?.[0]?.current_period_end);
-          let stringActiveBillingCycle = `${formatInvoiceDate(activeCurrentPeriodStart) ?? ''} - ${formatInvoiceDate(activeCurrentPeriodEnd) ?? ''}`
-          // 3 Prepare Body to print Invoice PDF
-          const printInvoice = {
-            invoice_number: `INV-${invoiceYear}-${setInvoiceSuffix}`,
-            issue_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
-            due_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
-            statement_descriptor: "Stripe",
-            payment_id: String(activePi.id || ''),
-            payment_method: paymentMethodLabels[getPaymentMethodType] ?? getPaymentMethodType,
-            status: "Paid",
-            subtotal: getAmount,
-            tax: 0.00,
-            total: getAmount,
-            amount_paid: getAmount,
-            balance_due: 0.00,
-            seller: {
-              name: "No Bounds Digital",
-              address_line1: "328 W High St",
-              city: "Elizabethtown",
-              state: "Pennsylvania",
-              postal_code: "17022",
-              country: "United States",
-              email: "nenad@noboundsdigital"
-            },
-            bill_to: {
-              name: setBillToName,
-              email: String(sub.metadata.email || '').trim(),
-              address_line1: getAddress,
-              city: getCity,
-              state: getState,
-              postal_code: getZip,
-              country: getCountry
-            },
-            line_items: [
-              { name: String(sub.metadata.product_name || '').trim(), quantity: 1, unit_price: getAmount, type: 'subscription', billing_cycle: stringActiveBillingCycle },
-              // { name: "Support", description: "Sep 28–Oct 28", quantity: 1, unit_price: 49.00 },
-            ],
-            // You can compute these or pass them precomputed
-          };
-
-          // 4 Build PDF (Buffer)
-          const createPdf = new FormData();
-          const pdfDataUri = await prepareInvoice(printInvoice);
-          let pdfData = pdfDataUri.replaceAll("data:application/pdf;filename=generated.pdf;base64,","");
-          pdfData = pdfData.replaceAll('"', '');
-          const buffer = Buffer.from(pdfData, "base64")
-
-          // 2 Upload to HubSpot Files using folderId
-          const fileName = `INV-${invoiceYear}-${setInvoiceSuffix}.pdf`;
-          createPdf.append('fileName', fileName);
-          createPdf.append('file', buffer, fileName);
-          createPdf.append('options', JSON.stringify({
-            "access":  "PUBLIC_NOT_INDEXABLE",
-            "overwrite": false
-          }));
-          createPdf.append('folderId', '282421374140');
-          
-          // 5 INSERT PDF INTO FILES
-          const tokenPdf01 = await setHubSpotToken(getPortalId);
-          const ACCESS_TOKEN_PDF_01 = tokenPdf01.access_token;
-          const client =  axios.create({
-            baseURL: 'https://api.hubapi.com',
-            headers: { 
-              accept: 'application/json', 
-              Authorization: `Bearer ${ACCESS_TOKEN_PDF_01}`
-            }
-          });
-          
-          let getPdfId;
-          let getPdfUrl;
-
-          try {
-            const ApiResponse2 = await client.post('/files/v3/files', createPdf, {
-              headers: createPdf.getHeaders()
-            });
-            getPdfId = ApiResponse2.data.id;
-            getPdfUrl = ApiResponse2.data.url;
-          } catch (err) {
-            console.error(err);
-            throw err;
-          }
-          console.log('File uploaded!');
-          console.log(getPdfId);
-          console.log(getPdfUrl);
-
             const tokenInfoAct1 = await setHubSpotToken(getPortalId);
             const ACCESS_TOKEN_ACT1 = tokenInfoAct1.access_token;
             const hubDbOptions = {
@@ -508,13 +393,13 @@ function formatInvoiceDate(ms) {
                 },
                 body: JSON.stringify({
                   values: {
-                    contact_email: String(sub.metadata.email).trim(),
+                    contact_email: getEmail,
                     contact_id: getContactId,
-                    customer_id: String(sub.customer).trim(),
-                    subscription_id: String(sub.id).trim(),
-                    subscription_name: String(sub.metadata.product_name).trim(),
-                    subscription_status: { name: String(sub.status).trim(), type: 'option' },
-                    current_period_end: sub.current_period_end * 1000
+                    customer_id: getSripeCustomerId,
+                    subscription_id: getStripeSubscriptionId,
+                    subscription_name: getProductName,
+                    subscription_status: { name: getStripeSubscriptionStatus, type: 'option' },
+                    current_period_end: getCurrentPeriodEnd
                   }
                 })
             };
@@ -578,7 +463,148 @@ function formatInvoiceDate(ms) {
           // First charge for a non-trial sub (pay-first flow)
           // Or $0 invoice for trial start (rare; usually no invoice is generated at trial start)
           // Mark subscription as active/paid in your system
-          console.log('Subscription is PAYED!')
+          console.log('Subscription is PAYED!');
+
+          // ----- Create Invoice PDF and Invoice Custom Object for ACTIVE SUBSCRIPTION -----
+          // 1 Search previous Invoices to get Invoice Sufix
+          const tokenInv01 = await setHubSpotToken(getPortalId);
+          const ACCESS_TOKEN_INV_01 = tokenInv01.access_token;
+          const invoiceYear = new Date().getFullYear();
+          const startSuffix = 1000;
+          const lastInvoiceSuffix = await searchInvoicesByYear(ACCESS_TOKEN_INV_01, invoiceYear);
+          console.log(lastInvoiceSuffix);
+          const setInvoiceSuffix = lastInvoiceSuffix != null ? lastInvoiceSuffix + 1 : startSuffix;
+
+          // 2 Create Invoice Body
+          // 2-1 Get Subscription Detals
+          const getSubscriptionId = String(invoice.subscription || '');
+          const invSubscription = await stripe.subscriptions.retrieve(getSubscriptionId);
+          let getInvPayerType = String(invSubscription.metadata.payer_type || '').trim();
+          let getInvEmail = String(invSubscription.metadata.email || '').trim();
+          let getInvFullName = String(invSubscription.metadata.full_name || '').trim();
+          let getInvCompanyName = String(invSubscription.metadata.company || '').trim();
+          let getInvProductName = String(invSubscription.metadata.product_name || '').trim();
+          // 2-2 Get Payment Intent ID
+          const invExpanded = await stripe.invoices.retrieve(invoice.id, {
+            expand: ['payment_intent', 'payment_intent.latest_charge'],
+          });
+          const paymentIntentId = typeof invExpanded.payment_intent === 'string' ? invExpanded.payment_intent : invExpanded.payment_intent?.id || null;
+          console.log('PI Id:', paymentIntentId);
+          const latestChargeId = invExpanded.payment_intent?.latest_charge || null;
+          let getPaymentMethodType = latestChargeId.payment_method_details.type;
+          console.log('Payment Method:', getPaymentMethodType);
+          // 2-3 Get Cusomer Datails
+          const getCustomerId =  String(invoice.customer || '');
+          const invCustomer = await stripe.customers.retrieve(getCustomerId);
+          let getInvAddress = String(invCustomer.address.line1 || '').trim();
+          let getInvCity = String(invCustomer.address.city || '').trim();
+          let getInvZip = String(invCustomer.address.postal_code || '').trim();
+          let getInvCountry = String(invCustomer.address.country || '').trim();
+          let getInvState = String(invCustomer.address.state || '').trim();
+          let setInvCountry = countryName(getInvCountry);
+          let setInvState = getInvCountry.toUpperCase() === 'US' ? usStateName(getInvState) : getInvState || '';
+          // 2-4 Get Invoice Detals
+          let getPaymentDate = invoice.created;
+          let getAmount = Number((invoice.amount_paid / 100).toFixed(2));
+          let setBillToName;
+          if(getInvPayerType === 'company'){
+            setBillToName = getInvCompanyName;
+          }else if(getInvPayerType === 'individual'){
+            setBillToName = getInvFullName;
+          }
+          const paymentMethodLabels = {
+            card: 'Card',
+            google_pay: 'GooglePay',   // as you prefer (no space)
+            apple_pay: 'Apple Pay',
+            us_bank_account: 'US Bank Account'
+          };
+          let activeCurrentPeriodStart = stripeSecondsToHubSpotDatePicker(invoice.period_start);
+          let activeCurrentPeriodEnd = stripeSecondsToHubSpotDatePicker(invoice.period_end);
+          let stringActiveBillingCycle = `${formatInvoiceDate(activeCurrentPeriodStart) ?? ''} - ${formatInvoiceDate(activeCurrentPeriodEnd) ?? ''}`
+          // 3 Prepare Body to print Invoice PDF
+          const printInvoice = {
+            invoice_number: `INV-${invoiceYear}-${setInvoiceSuffix}`,
+            issue_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
+            due_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
+            statement_descriptor: "Stripe",
+            payment_id: paymentIntentId,
+            payment_method: paymentMethodLabels[getPaymentMethodType] ?? getPaymentMethodType,
+            status: "Paid",
+            subtotal: getAmount,
+            tax: 0.00,
+            total: getAmount,
+            amount_paid: getAmount,
+            balance_due: 0.00,
+            seller: {
+              name: "No Bounds Digital",
+              address_line1: "328 W High St",
+              city: "Elizabethtown",
+              state: "Pennsylvania",
+              postal_code: "17022",
+              country: "United States",
+              email: "nenad@noboundsdigital"
+            },
+            bill_to: {
+              name: setBillToName,
+              email: getInvEmail,
+              address_line1: getInvAddress,
+              city: getInvCity,
+              state: setInvState,
+              postal_code: getInvZip,
+              country: setInvCountry
+            },
+            line_items: [
+              { name: getInvProductName, quantity: 1, unit_price: getAmount, type: 'subscription', billing_cycle: stringActiveBillingCycle },
+              // { name: "Support", description: "Sep 28–Oct 28", quantity: 1, unit_price: 49.00 },
+            ],
+            // You can compute these or pass them precomputed
+          };
+
+          // 4 Build PDF (Buffer)
+          const createPdf = new FormData();
+          const pdfDataUri = await prepareInvoice(printInvoice);
+          let pdfData = pdfDataUri.replaceAll("data:application/pdf;filename=generated.pdf;base64,","");
+          pdfData = pdfData.replaceAll('"', '');
+          const buffer = Buffer.from(pdfData, "base64")
+
+          // 2 Upload to HubSpot Files using folderId
+          const fileName = `INV-${invoiceYear}-${setInvoiceSuffix}.pdf`;
+          createPdf.append('fileName', fileName);
+          createPdf.append('file', buffer, fileName);
+          createPdf.append('options', JSON.stringify({
+            "access":  "PUBLIC_NOT_INDEXABLE",
+            "overwrite": false
+          }));
+          createPdf.append('folderId', '282421374140');
+          
+          // 5 INSERT PDF INTO FILES
+          const tokenPdf01 = await setHubSpotToken(getPortalId);
+          const ACCESS_TOKEN_PDF_01 = tokenPdf01.access_token;
+          const client =  axios.create({
+            baseURL: 'https://api.hubapi.com',
+            headers: { 
+              accept: 'application/json', 
+              Authorization: `Bearer ${ACCESS_TOKEN_PDF_01}`
+            }
+          });
+          
+          let getPdfId;
+          let getPdfUrl;
+
+          try {
+            const ApiResponse2 = await client.post('/files/v3/files', createPdf, {
+              headers: createPdf.getHeaders()
+            });
+            getPdfId = ApiResponse2.data.id;
+            getPdfUrl = ApiResponse2.data.url;
+          } catch (err) {
+            console.error(err);
+            throw err;
+          }
+          console.log('File uploaded!');
+          console.log(getPdfId);
+          console.log(getPdfUrl);
+
         } else if (invoice.billing_reason === 'subscription_cycle') {
           // Renewal succeeded
         }
