@@ -494,12 +494,9 @@ function formatInvoiceDate(ms) {
           let getInvCompanyName = String(invSubscription.metadata.company || '').trim();
           let getInvProductName = String(invSubscription.metadata.product_name || '').trim();
           // 2-2 Get Payment Intent ID
-          const paymentIntentId = String(invoice.payment.payment_intent || '');
+          const paymentIntentId = String(invoice.payment_intent || '');
           console.log('PI Id:', paymentIntentId);
-          const piCharge = await stripe.paymentIntents.retrieve(paymentIntentId, {
-            expand: ['latest_charge', 'payment_method']
-          });
-          const charge = piCharge.latest_charge || null;
+          const charge = invoice.charge || null;
           let getPaymentMethodType = charge.payment_method_details.type;
           console.log('Payment Method:', getPaymentMethodType);
           // 2-3 Get Cusomer Datails
