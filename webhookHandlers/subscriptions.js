@@ -2,7 +2,10 @@
 const { retryFor } = require('../utils/retry');
 const axios = require('axios');
 const setHubSpotToken = require('../database/getTokens');
+const { prepareInvoice } = require('../utils/prepareInvoice');
+const FormData = require('form-data');
 
+// Utility Function to search Contact
 const searchContactByEmail = async (accessToken, email) => {
   try {
     const response = await axios.post('https://api.hubapi.com/crm/v3/objects/contacts/search', {
@@ -37,6 +40,7 @@ const searchContactByEmail = async (accessToken, email) => {
   }
 };
 
+// Utility Function to search Company
 const searchCompanyByNameOrDomain = async (accessToken, { name, domain }) => {
   try {
     const response = await axios.post('https://api.hubapi.com/crm/v3/objects/companies/search', {
@@ -45,14 +49,13 @@ const searchCompanyByNameOrDomain = async (accessToken, { name, domain }) => {
         { filters: [{ propertyName: 'domain', operator: 'EQ', value: domain }] }
       ],
       limit: 1,
-      properties: ['hs_object_id']
+      properties: ['hs_object_id', 'name']
     }, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`
       }
     });
-
     if (response.data.results.length > 0) {
       return response.data.results[0].properties; // Returns the contact ID
     } else {
@@ -63,22 +66,71 @@ const searchCompanyByNameOrDomain = async (accessToken, { name, domain }) => {
     return null;
   }
 };
-function dollars(amount, currency) {
-    const d = (currency || 'usd').toLowerCase() === 'jpy' ? 0 : 2;
-    return (amount / Math.pow(10, d)).toFixed(d);
+
+// Utility Function to search Last Invoice Sufix
+const searchInvoicesByYear = async (accessToken, invoice_year) => {
+  try {
+    const response = await axios.post('https://api.hubapi.com/crm/v3/objects/2-192773368/search', {
+      filterGroups: [
+        {
+          filters: [
+            {
+              propertyName: 'invoice_year',
+              operator: 'EQ',
+              value: String(invoice_year)
+            }
+          ]
+        }
+      ],
+      properties: ['invoice_number_sufix'],
+      sorts: [{ "propertyName": "invoice_number_sufix", "direction": "DESCENDING" }],
+      limit: 1
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    const result = response.data?.results?.[0];
+    if (!result) return null;
+
+    const last = Number(result.properties?.invoice_number_sufix);
+    return Number.isFinite(last) ? last : null;
+  } catch (error) {
+    console.error('Error:', error.response?.data || error.message);
+    return null;
   }
+};
+
+// Convert Stripe's seconds timestamp to a HubSpot date picker value
+function stripeSecondsToHubSpotDatePicker(seconds) {
+  const d = new Date(seconds * 1000); // seconds -> ms
+  // Build midnight UTC for that calendar date
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+function formatInvoiceDate(ms) {
+  const d = new Date(ms); // hubspotDateMs
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC', // ensure no timezone shifts
+  }).format(d);
+}
   
   module.exports = {
     // Lifecycle updates: trialing -> active -> past_due -> canceled …
     async onSubscriptionEvent(event) {
         let getContactId;
-        let getContactAddress;
-        let getContactCity;
-        let getContactZip;
-        let getContactState;
-        let getContactCountry;
+        let getAddress;
+        let getCity;
+        let getZip;
+        let getState;
+        let getCountry;
         let getCompanyId;
         let getPortalId;
+        let getPayerType;
       const sub = event.data.object;
       // sub.status: trialing | active | past_due | canceled | incomplete | incomplete_expired | unpaid | paused
       // sub.metadata.flow: 'trial' | 'pay_now' (if you set this on create)
@@ -86,6 +138,7 @@ function dollars(amount, currency) {
       switch (event.type) {
         case 'customer.subscription.created':
           getPortalId = String(sub.metadata.hsPortalId).trim();
+          getPayerType = String(sub.metadata.payer_type).trim();
           const tokenInfo01 = await setHubSpotToken(getPortalId);
           const ACCESS_TOKEN01 = tokenInfo01.access_token;
           // Try to find the contact for up to ~7 seconds
@@ -94,13 +147,16 @@ function dollars(amount, currency) {
             { maxMs: 7000, shouldRetry: (err, out) => !err && !out }
           );
           if (contact) {
-              getContactId = contact.hs_object_id;
-              getContactAddress = contact.address;
-              getContactCity = contact.city;
-              getContactZip = contact.zip;
-              getContactState = contact.state;
-              getContactCountry = contact.country;
-              console.log('Contact Name found:', contact.firstname);
+            getContactId = String(contact.hs_object_id);
+            getAddress = String(contact.address || '').trim();
+            getCity = String(contact.city || '').trim();
+            getZip = String(contact.zip || '').trim();
+            getCountry = String(contact.country || '').trim();
+            if(getCountry === 'United States'){
+              getState = String(contact.state || '').trim();
+            }else{
+              getState = '';
+            }
           }
           // Search for Company if Payer Type is COMPANY
           if(String(sub.metadata.payer_type).trim() === 'company'){
@@ -110,7 +166,7 @@ function dollars(amount, currency) {
             const domain = (emailForCompany.includes('@') ? emailForCompany.split('@')[1] : '').toLowerCase();
             const tokenInfo02 = await setHubSpotToken(getPortalId);
             const ACCESS_TOKEN02 = tokenInfo02.access_token;
-            const company = await searchCompanyByNameOrDomain(ACCESS_TOKEN02, { name: companyNameToSearch, domain });
+            const company = await searchCompanyByNameOrDomain(ACCESS_TOKEN02, { name: companyNameToSearch, domain: domain });
             if (company) {
               getCompanyId = company.hs_object_id;
               console.log('Company found:', company.name);
@@ -129,20 +185,20 @@ function dollars(amount, currency) {
               if (domain && !isFree){
                 properties.domain = domain;
               }
-              if (getContactAddress){
-                properties.address = getContactAddress;
+              if (getAddress){
+                properties.address = getAddress;
               }
-              if (getContactCity){
-                properties.city = getContactCity;
+              if (getCity){
+                properties.city = getCity;
               }
-              if (getContactZip){
-                properties.zip = getContactZip;
+              if (getZip){
+                properties.zip = getZip;
               }
-              if (getContactState){
-                properties.state = getContactState;
+              if (getState){
+                properties.state = getState;
               }
-              if (getContactCountry){
-                properties.country = getContactCountry;
+              if (getCountry){
+                properties.country = getCountry;
               }
               const createCompanyUrl = 'https://api.hubapi.com/crm/v3/objects/companies';
               const createCompanyBody = {
@@ -220,6 +276,8 @@ function dollars(amount, currency) {
           }
           const hubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows';
           const publishHubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/draft/publish';
+
+          // ----- TRIAL ---
           if (sub.status === 'trialing') {
             const tokenInfoDeal1 = await setHubSpotToken(getPortalId);
             const ACCESS_TOKEN_DEAL1 = tokenInfoDeal1.access_token;
@@ -284,6 +342,7 @@ function dollars(amount, currency) {
             } catch (error) {
             console.error(error);
             }
+          // ----- ACTIVE ---
           } else if (sub.status === 'active') {
             console.log('ACTIVE SUBSCRIPTION CREATED WITH ID:', sub.id);
             console.log('ACTIVE SUBSCRIPTION CREATED FOR CUSTOMER ID:', sub.customer);
@@ -306,11 +365,137 @@ function dollars(amount, currency) {
               if (!dealRes.ok) {
                 console.error('Deal create failed:', dealRes.status, dealData);
               } else {
-                console.log('Trial Deal created');
+                console.log('Deal created');
               }
             } catch (err) {
               console.error('Fetch error creating deal:', err);
             }
+
+            // ----- Create Invoice PDF and Invoice Custom Object for ACTIVE SUBSCRIPTION -----
+          // 1 Search previous Invoices to get Invoice Sufix
+          const tokenInv01 = await setHubSpotToken(getPortalId);
+          const ACCESS_TOKEN_INV_01 = tokenInv01.access_token;
+          const invoiceYear = new Date().getFullYear();
+          const startSuffix = 1000;
+          const lastInvoiceSuffix = await searchInvoicesByYear(ACCESS_TOKEN_INV_01, invoiceYear);
+          console.log(lastInvoiceSuffix);
+          const setInvoiceSuffix = lastInvoiceSuffix != null ? lastInvoiceSuffix + 1 : startSuffix;
+
+          // 2 Create Invoice Body
+          const activeInvoiceId = sub.latest_invoice;
+          let activeInvoice;
+          let getPaymentMethodType;
+          let getPaymentDate;
+          let getAmount;
+          if (activeInvoiceId) {
+            activeInvoice = await stripe.invoices.retrieve(activeInvoiceId, {
+              expand: ['payment_intent.latest_charge', 'payment_intent.charges.data.balance_transaction']
+            });
+          }
+          const activePi = activeInvoice.payment_intent;
+          const activeCharge = activePi?.latest_charge || null;
+          getPaymentMethodType = activeCharge.payment_method_details.type;
+          getPaymentDate = activeCharge.created;
+          getAmount = Number((activePi.amount / 100).toFixed(2));
+          let setBillToName;
+          if(getPayerType === 'company'){
+            setBillToName = String(sub.metadata.company).trim();
+          }else if(getPayerType === 'individual'){
+            setBillToName = String(sub.metadata.full_name).trim();
+          }
+          const paymentMethodLabels = {
+            card: 'Card',
+            google_pay: 'GooglePay',   // as you prefer (no space)
+            apple_pay: 'Apple Pay',
+            us_bank_account: 'US Bank Account'
+          };
+          let activeCurrentPeriodStart = stripeSecondsToHubSpotDatePicker(sub.items?.data?.[0]?.current_period_start);
+          let activeCurrentPeriodEnd = stripeSecondsToHubSpotDatePicker(sub.items?.data?.[0]?.current_period_end);
+          let stringActiveBillingCycle = `${formatInvoiceDate(activeCurrentPeriodStart) ?? ''} - ${formatInvoiceDate(activeCurrentPeriodEnd) ?? ''}`
+          // 3 Prepare Body to print Invoice PDF
+          const printInvoice = {
+            invoice_number: `INV-${invoiceYear}-${setInvoiceSuffix}`,
+            issue_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
+            due_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
+            statement_descriptor: "Stripe",
+            payment_id: String(activePi.id || ''),
+            payment_method: paymentMethodLabels[getPaymentMethodType] ?? getPaymentMethodType,
+            status: "Paid",
+            subtotal: getAmount,
+            tax: 0.00,
+            total: getAmount,
+            amount_paid: getAmount,
+            balance_due: 0.00,
+            seller: {
+              name: "No Bounds Digital",
+              address_line1: "328 W High St",
+              city: "Elizabethtown",
+              state: "Pennsylvania",
+              postal_code: "17022",
+              country: "United States",
+              email: "nenad@noboundsdigital"
+            },
+            bill_to: {
+              name: setBillToName,
+              email: String(sub.metadata.email || '').trim(),
+              address_line1: getAddress,
+              city: getCity,
+              state: getState,
+              postal_code: getZip,
+              country: getCountry
+            },
+            line_items: [
+              { name: String(sub.metadata.product_name || '').trim(), quantity: 1, unit_price: getAmount, type: 'subscription', billing_cycle: stringActiveBillingCycle },
+              // { name: "Support", description: "Sep 28–Oct 28", quantity: 1, unit_price: 49.00 },
+            ],
+            // You can compute these or pass them precomputed
+          };
+
+          // 4 Build PDF (Buffer)
+          const createPdf = new FormData();
+          const pdfDataUri = await prepareInvoice(printInvoice);
+          let pdfData = pdfDataUri.replaceAll("data:application/pdf;filename=generated.pdf;base64,","");
+          pdfData = pdfData.replaceAll('"', '');
+          const buffer = Buffer.from(pdfData, "base64")
+
+          // 2 Upload to HubSpot Files using folderId
+          const fileName = `INV-${invoiceYear}-${setInvoiceSuffix}.pdf`;
+          createPdf.append('fileName', fileName);
+          createPdf.append('file', buffer, fileName);
+          createPdf.append('options', JSON.stringify({
+            "access":  "PUBLIC_NOT_INDEXABLE",
+            "overwrite": false
+          }));
+          createPdf.append('folderId', '282421374140');
+          
+          // 5 INSERT PDF INTO FILES
+          const tokenPdf01 = await setHubSpotToken(getPortalId);
+          const ACCESS_TOKEN_PDF_01 = tokenPdf01.access_token;
+          const client =  axios.create({
+            baseURL: 'https://api.hubapi.com',
+            headers: { 
+              accept: 'application/json', 
+              Authorization: `Bearer ${ACCESS_TOKEN_PDF_01}`
+            }
+          });
+          
+          let getPdfId;
+          let getPdfUrl;
+
+          try {
+            const ApiResponse2 = await client.post('/files/v3/files', createPdf, {
+              headers: createPdf.getHeaders()
+            });
+            getPdfId = ApiResponse2.data.id;
+            getPdfUrl = ApiResponse2.data.url;
+          } catch (err) {
+            console.error(err);
+            throw err;
+          }
+          console.log('File uploaded!');
+          console.log(getPdfId);
+          console.log(getPdfUrl);
+
             const tokenInfoAct1 = await setHubSpotToken(getPortalId);
             const ACCESS_TOKEN_ACT1 = tokenInfoAct1.access_token;
             const hubDbOptions = {
