@@ -32,7 +32,7 @@ router.post('/webhooks/stripe', express.raw({ type: 'application/json' }), async
           const category = (pi.metadata?.category || '').toLowerCase();
           if (category === 'donation') {
             await donationOneTimeHandlers.onSucceeded(pi);
-          } else {
+          } else if(category === 'purchase') {
             await oneTimeHandlers.onSucceeded(pi);
           }
           break;
@@ -42,7 +42,7 @@ router.post('/webhooks/stripe', express.raw({ type: 'application/json' }), async
           const category = (pi.metadata?.category || '').toLowerCase();
           if (category === 'donation') {
             await donationOneTimeHandlers.onFailed(pi);
-          } else {
+          } else if(category === 'purchase') {
             await oneTimeHandlers.onFailed(pi);
           }
           break;
