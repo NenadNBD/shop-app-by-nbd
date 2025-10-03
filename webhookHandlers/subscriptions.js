@@ -1,6 +1,8 @@
 // handlers/subscriptions.js
 const { retryFor } = require('../utils/retry');
 const axios = require('axios');
+const Stripe = require('stripe');
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const setHubSpotToken = require('../database/getTokens');
 const { prepareInvoice } = require('../utils/prepareInvoice');
 const FormData = require('form-data');
