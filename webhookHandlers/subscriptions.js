@@ -467,6 +467,7 @@ function formatInvoiceDate(ms) {
 
           // ----- Create Invoice PDF and Invoice Custom Object for ACTIVE SUBSCRIPTION -----
           // 1 Search previous Invoices to get Invoice Sufix
+          let getPortalId = String(invSubscription.metadata.hsPortalId || '').trim();
           const tokenInv01 = await setHubSpotToken(getPortalId);
           const ACCESS_TOKEN_INV_01 = tokenInv01.access_token;
           const invoiceYear = new Date().getFullYear();
