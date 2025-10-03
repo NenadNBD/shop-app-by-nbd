@@ -190,7 +190,7 @@ function formatInvoiceDate(ms) {
           let getCompanyName = String(invoice.subscription_details.metadata.company || '').trim();
           let getCompanyId;
           let getPortalId = String(invoice.subscription_details.metadata.hsPortalId || '').trim();
-          let getPayerType = String(invoice.subscription_details.payer_type || '').trim();
+          let getPayerType = String(invoice.subscription_details.metadata.payer_type || '').trim();
           let getProductName = String(invoice.subscription_details.metadata.product_name || '').trim();
           let getSripeCustomerId = String(invoice.customer || '').trim();
           let getStripeSubscriptionId = String(invoice.subscription || '').trim();
