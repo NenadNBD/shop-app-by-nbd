@@ -539,6 +539,7 @@ function formatInvoiceDate(ms) {
             throw err;
           }
           console.log('File uploaded!');
+          let setPdfUrl = getPdfUrl.replace('https://146896786.fs1.hubspotusercontent-eu1.net', 'https://nbd-shop.nenad-code.dev');
           
           
           // ----- 08 Create Record in Custom Object INVOICE -----
@@ -570,6 +571,8 @@ function formatInvoiceDate(ms) {
               stripe_customer_id: getSripeCustomerId,
               stripe_subscription_id: getStripeSubscriptionId,
               contact_id: getContactId,
+              printed_invoice_id: getPdfId,
+              printed_invoice_url: setPdfUrl,
             }
           };
           console.log('Invoice Body:');
@@ -701,7 +704,7 @@ function formatInvoiceDate(ms) {
           const updateContactWithPdfBody = {
             properties: {
               invoice_number: String('INV-' + invoiceYear + '-' + setInvoiceSuffix),
-              invoice_pdf_url: getPdfUrl,
+              invoice_pdf_url: setPdfUrl,
               invoice_pdf_id: getPdfId,
               has_subscriptions: 'Yes',
             },
