@@ -138,8 +138,8 @@ function formatInvoiceDate(ms) {
             let getLatestInvoice = String(sub.latest_invoice || '');
             let getTrialStart = Number(sub.trial_start * 1000);
             let getTrialEnd = Number(sub.trial_end * 1000);
-            let setTrialStart = stripeSecondsToHubSpotDatePicker(getTrialStart);
-            let setTrialEnd = stripeSecondsToHubSpotDatePicker(getTrialEnd);
+            let setTrialStart = stripeSecondsToHubSpotDatePicker(sub.trial_start);
+            let setTrialEnd = stripeSecondsToHubSpotDatePicker(sub.trial_end);
             const trialInvoice = await stripe.invoices.retrieve(getLatestInvoice);
             console.log('Log Whole Invoice Object!!!');
             console.log(trialInvoice);
@@ -662,6 +662,7 @@ function formatInvoiceDate(ms) {
                 invoice_pdf_url: setPdfUrl,
                 invoice_pdf_id: getPdfId,
                 has_subscriptions: 'Yes',
+                subscription_status: 'Trialing',
               },
             };
             const tokenUpdateContactWithPdf = await setHubSpotToken(getPortalId);
@@ -1258,6 +1259,7 @@ function formatInvoiceDate(ms) {
               invoice_pdf_url: setPdfUrl,
               invoice_pdf_id: getPdfId,
               has_subscriptions: 'Yes',
+              subscription_status: 'New',
             },
           };
           const tokenUpdateContactWithPdf = await setHubSpotToken(getPortalId);
