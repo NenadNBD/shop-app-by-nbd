@@ -132,7 +132,16 @@ function formatInvoiceDate(ms) {
         case 'customer.subscription.created':
           // ----- TRIAL ---
           if (sub.status === 'trialing') {
-            console.log('This is Trial. Do staff here');
+            console.log(sub.status);
+            let getLatestInvoice = String(sub.latest_invoice || '');
+            let getTrialStart = Number(sub.trial_start * 1000);
+            let getTrialEnd = Number(sub.trial_end * 1000);
+            let setTrailStart = stripeSecondsToHubSpotDatePicker(getTrialStart);
+            let setTrailEnd = stripeSecondsToHubSpotDatePicker(getTrialEnd);
+            console.log(setTrailStart + ' / ' + setTrailEnd);
+            console.log(getLatestInvoice);
+            const trialInvoice = await stripe.invoices.retrieve(getLatestInvoice);
+            console.log(trialInvoice.id);
           // ----- ACTIVE ---
           } else if (sub.status === 'active') {
             console.log('Proceed to ON INVOICE EVENT');
