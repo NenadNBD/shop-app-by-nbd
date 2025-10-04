@@ -141,6 +141,8 @@ function formatInvoiceDate(ms) {
             let setTrialStart = stripeSecondsToHubSpotDatePicker(getTrialStart);
             let setTrialEnd = stripeSecondsToHubSpotDatePicker(getTrialEnd);
             const trialInvoice = await stripe.invoices.retrieve(getLatestInvoice);
+            console.log('Log Whole Invoice Object!!!');
+            console.log(trialInvoice);
 
 
             let getContactId;
