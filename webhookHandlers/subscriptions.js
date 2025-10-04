@@ -663,6 +663,7 @@ function formatInvoiceDate(ms) {
                 invoice_pdf_id: getPdfId,
                 has_subscriptions: 'Yes',
                 subscription_status: 'Trialing',
+                subscription_product_name: getProductName,
               },
             };
             const tokenUpdateContactWithPdf = await setHubSpotToken(getPortalId);
@@ -1260,6 +1261,7 @@ function formatInvoiceDate(ms) {
               invoice_pdf_id: getPdfId,
               has_subscriptions: 'Yes',
               subscription_status: 'New',
+              subscription_product_name: getProductName,
             },
           };
           const tokenUpdateContactWithPdf = await setHubSpotToken(getPortalId);
