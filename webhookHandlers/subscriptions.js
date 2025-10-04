@@ -146,8 +146,8 @@ function formatInvoiceDate(ms) {
 
 
             let getContactId;
-            let getEmail = String(trialInvoice.subscription_details.metadata.email || '').trim();
-            let getFullName = String(trialInvoice.subscription_details.metadata.full_name || '').trim();
+            let getEmail = String(sub.metadata.email || '').trim();
+            let getFullName = String(sub.metadata.full_name || '').trim();
             let getAddress = String(trialInvoice.customer_address.line1 || '').trim();
             let getCity = String(trialInvoice.customer_address.city || '').trim();
             let getZip = String(trialInvoice.customer_address.postal_code || '').trim();
@@ -155,20 +155,16 @@ function formatInvoiceDate(ms) {
             let getCountry = String(trialInvoice.customer_address.country || '').trim();
             let setState = getCountry.toUpperCase() === 'US' ? usStateName(getState) : getCountry || '';
             let setCountry = countryName(getCountry);
-            let getCompanyName = String(trialInvoice.subscription_details.metadata.company || '').trim();
+            let getCompanyName = String(sub.metadata.company || '').trim();
             let getCompanyId;
-            let getPortalId = String(trialInvoice.subscription_details.metadata.hsPortalId || '').trim();
-            let getPayerType = String(trialInvoice.subscription_details.metadata.payer_type || '').trim();
-            let getProductName = String(trialInvoice.subscription_details.metadata.product_name || '').trim();
-            let getSripeCustomerId = String(trialInvoice.customer || '').trim();
-            let getStripeSubscriptionId = String(trialInvoice.subscription || '').trim();
+            let getPortalId = String(sub.metadata.hsPortalId || '').trim();
+            let getPayerType = String(sub.metadata.payer_type || '').trim();
+            let getProductName = String(sub.metadata.product_name || '').trim();
+            let getSripeCustomerId = String(sub.customer || '').trim();
+            let getStripeSubscriptionId = String(sub.id || '').trim();
             let getStripeSubscriptionStatus = 'trialing';
             let getPaymentDate = Number(trialInvoice.created);
             let getAmount = 0.00;
-            const paymentIntentId = String(trialInvoice.payment_intent || '').trim();
-            const getChargeId = String(trialInvoice.charge || '').trim();;
-            const charge = await stripe.charges.retrieve(getChargeId);
-            let getPaymentMethodType = String(charge.payment_method_details.type || '').trim();
 
             // ----- 01 Search HubSpot for Contact ID -----
             const tokenInfo01 = await setHubSpotToken(getPortalId);
@@ -415,13 +411,8 @@ function formatInvoiceDate(ms) {
             }else if(getPayerType === 'individual'){
               setBillToName = getFullName;
             }
-            const paymentMethodLabels = {
-              card: 'Card',
-              google_pay: 'GooglePay',   // as you prefer (no space)
-              apple_pay: 'Apple Pay',
-              us_bank_account: 'US Bank Account'
-            };
-            let stringActiveBillingCycle = `Trial: ${formatInvoiceDate(setTrialStart) ?? ''} - ${formatInvoiceDate(setTrialEnd) ?? ''}`;
+
+            let stringActiveBillingCycle = `${formatInvoiceDate(setTrialStart) ?? ''} - ${formatInvoiceDate(setTrialEnd) ?? ''}`;
 
             // 3 Prepare Body to print Invoice PDF
             const printInvoice = {
@@ -429,8 +420,8 @@ function formatInvoiceDate(ms) {
               issue_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
               due_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
               statement_descriptor: "Stripe",
-              payment_id: paymentIntentId,
-              payment_method: paymentMethodLabels[getPaymentMethodType] ?? getPaymentMethodType,
+              payment_id: '',
+              payment_method: '',
               status: "Trialing",
               subtotal: 0.00,
               tax: 0.00,
@@ -456,7 +447,7 @@ function formatInvoiceDate(ms) {
                 country: setCountry
               },
               line_items: [
-                { name: getProductName, quantity: 1, unit_price: getAmount, type: 'subscription', billing_cycle: stringActiveBillingCycle },
+                { name: 'Trial period for ' + getProductName, quantity: 1, unit_price: getAmount, type: 'subscription', billing_cycle: stringActiveBillingCycle },
                 // { name: "Support", description: "Sep 28–Oct 28", quantity: 1, unit_price: 49.00 },
               ],
               // You can compute these or pass them precomputed
@@ -518,8 +509,8 @@ function formatInvoiceDate(ms) {
                 status: 'Trialing',
                 statement_descriptor: 'Stripe',
                 transaction_type: 'Subscription',
-                payment_id: paymentIntentId,
-                payment_method: paymentMethodLabels[getPaymentMethodType] ?? getPaymentMethodType,
+                payment_id: 'Trialing',
+                payment_method: 'Trialing',
                 product: getProductName,
                 quantity: 1,
                 amount_subtotal: 0.00,
