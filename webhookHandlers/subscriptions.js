@@ -121,11 +121,13 @@ function formatInvoiceDate(ms) {
     timeZone: 'UTC', // ensure no timezone shifts
   }).format(d);
 }
-  
+  let checkSubscriptionType = '';
   module.exports = {
     // Lifecycle updates: trialing -> active -> past_due -> canceled …
     async onSubscriptionEvent(event) {
       const sub = event.data.object;
+      checkSubscriptionType = String(sub.status || '');
+      console.log('LOG HERE MAIN SUBSCRIPTION TYPE:',checkSubscriptionType);
       // sub.status: trialing | active | past_due | canceled | incomplete | incomplete_expired | unpaid | paused
       // sub.metadata.flow: 'trial' | 'pay_now' (if you set this on create)
       switch (event.type) {
@@ -179,7 +181,7 @@ function formatInvoiceDate(ms) {
       // const productId = firstLine?.price?.product;
       console.log('Monitor Subscription Invoices');
   
-      if (event.type === 'invoice.payment_succeeded') {
+      if (event.type === 'invoice.payment_succeeded' && checkSubscriptionType === 'active') {
         if (invoice.billing_reason === 'subscription_create') {
           // First charge for a non-trial sub (pay-first flow)
           // Or $0 invoice for trial start (rare; usually no invoice is generated at trial start)
