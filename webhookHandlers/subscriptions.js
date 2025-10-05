@@ -716,7 +716,7 @@ function isPriceChange(sub) {
           // ----- UPGRADE/DOWNGRADE
           console.log('Is this Subscription Upgrade/Downgrade?');
           console.log(isPriceChange(sub));
-          if (isPriceChange(sub)) {
+          if (isPriceChange(sub) && checkSubscriptionType === 'active') {
             // Fetch price objects to compare amounts/features
             updatedportalId = String(sub.metadata.hsPortalId || '');
             updatedPayerType = String(sub.metadata.payer_type || '');
