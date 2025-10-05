@@ -112,6 +112,7 @@ function stripeSecondsToHubSpotDatePicker(seconds) {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
+// Utility Function to format Stripe Date (in seconds) to human readable fromat - US Based (Ocober 4, 2025)
 function formatInvoiceDate(ms) {
   const d = new Date(ms); // hubspotDateMs
   return new Intl.DateTimeFormat('en-US', {
@@ -120,6 +121,13 @@ function formatInvoiceDate(ms) {
     day: 'numeric',
     timeZone: 'UTC', // ensure no timezone shifts
   }).format(d);
+}
+
+// Utility Function to detect if Subscription is Upgraded/Downgraded
+function isPriceChange(sub) {
+  const newPriceId = String(sub.items.data[0].price.id || '');
+  const oldPriceId = String(sub.metadata.priceId || '');
+  return (newPriceId !== '' && oldPriceId !== '' && newPriceId !== oldPriceId);
 }
   let checkSubscriptionType = '';
   module.exports = {
@@ -696,11 +704,169 @@ function formatInvoiceDate(ms) {
           break;
   
         case 'customer.subscription.updated':
-          // react to status changes (trial -> active; past_due; paused/resumed, etc.)
+          let updatedportalId;
+          let updatedPayerType;
+          let updatedCustomerId;
+          let updatedSubscriptionId;
+          let updatedContactId;
+          let updatedCompanyId;
+          let updatedDealId;
+          let updatedFullName;
+          let updatedCompanyName;
+          // ----- UPGRADE/DOWNGRADE
+          console.log('Is this Subscription Upgrade/Downgrade?');
+          console.log(isPriceChange(sub));
+          if (isPriceChange(sub)) {
+            // Fetch price objects to compare amounts/features
+            updatedportalId = String(sub.metadata.hsPortalId || '');
+            updatedPayerType = String(sub.metadata.payer_type || '');
+            updatedCustomerId = String(sub.customer || '');
+            updatedSubscriptionId = String(sub.id || '');
+            updatedContactId = String(sub.metadata.hsContactId || '');
+            updatedFullName = String(sub.metadata.full_name || '');
+            if(updatedPayerType === 'company'){
+              updatedCompanyId = String(sub.metadata.hsCompanyId || '');
+              updatedCompanyName = String(sub.metadata.company || '');
+            }else{
+              updatedCompanyId = '';
+              updatedCompanyName = '';
+            }
+            updatedDealId = String(sub.metadata.hsDealId || '');
+            let oldPriceId = String(sub.metadata.priceId || '');
+            let newPriceId = String(sub.items.data?.[0].price.id || '');
+            let getOldPrice;
+            let getOldPriceAmount;
+            let getNewPrice;
+            let getNewPriceAmount;
+            let setNewPriceAmount;
+            let getNewProductId;
+            let getProductObject;
+            let getNewProductName;
+            getOldPrice = await stripe.prices.retrieve(oldPriceId);
+            getOldPriceAmount = getOldPrice.unit_amount;
+            getNewPrice = await stripe.prices.retrieve(newPriceId);
+            getNewPriceAmount = getNewPrice.unit_amount;
+            setNewPriceAmount = Number((getNewPriceAmount / 100).toFixed(2));
+            getNewProductId = String(getNewPrice.product || '');
+            getProductObject = await stripe.products.retrieve(getNewProductId);
+            getNewProductName = String(getProductObject.name || '');
+
+            // ----- UPDATE DEAL -----
+            let updateDealName;
+            if(updatedPayerType === 'company'){
+              updateDealName = updatedCompanyName + ' - ' + getNewProductName;
+            }else if(updatedPayerType === 'individual'){
+              updateDealName = updatedFullName + ' - ' + getNewProductName;
+            }
+            const updateDealBody = {
+              properties: {
+                amount: setNewPriceAmount,
+                dealname: updateDealName,
+              },
+            };
+            const updateDealUrl = 'https://api.hubapi.com/crm/v3/objects/0-3/' + updatedDealId;
+            const tokenUpdateDeal = await setHubSpotToken(updatedportalId);
+            const ACCESS_UPDATE_DEAL = tokenUpdateDeal.access_token;
+            const updateDealOptions = {
+              method: 'PATCH',
+              headers: {
+                Authorization: `Bearer ${ACCESS_UPDATE_DEAL}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(updateDealBody)
+            };
+            try {
+              const dealRes = await fetch(updateDealUrl, updateDealOptions);
+              const dealData = await dealRes.json();
+              if (!dealRes.ok) {
+                console.error('Deal update failed:', dealRes.status, dealData);
+              } else {
+                getDealId = String(dealData.id);
+                console.log('Deal updated');
+              }
+            } catch (err) {
+              console.error('Fetch error creating deal:', err);
+            }
+
+            // ----- UPDATE HUBDB -----
+            // 1 Find Row To Update
+            let getHubDbRowToUpdate;
+            const findRowToUpdateUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows?contact_id__eq=' + updatedContactId + '&customer_id__eq=' + updatedCustomerId + '&subscription_id__eq=' + updatedSubscriptionId;
+            const tokenHubDb01 = await setHubSpotToken(updatedportalId);
+            const ACCESS_HUBDB_01 = tokenHubDb01.access_token;
+            const findRowToUpdateOptions = {
+              method: 'GET', 
+              headers: {
+                Authorization: `Bearer ${ACCESS_HUBDB_01}`
+              }
+            };
+            try {
+              const findRowToUpdateResponse = await fetch(findRowToUpdateUrl, findRowToUpdateOptions);
+              const findRowToUpdateData = await findRowToUpdateResponse.json();
+              getHubDbRowToUpdate = findRowToUpdateData.results[0].hs_id;
+              // 2 Update Row If Founded
+              if(getHubDbRowToUpdate){
+                const updateRowUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows/' + getHubDbRowToUpdate + '/draft';
+                const tokenHubDb02 = await setHubSpotToken(updatedportalId);
+                const ACCESS_HUBDB_02 = tokenHubDb02.access_token;
+                const updateRowOptions = {
+                  method: 'PATCH',
+                  headers: {
+                    Authorization: `Bearer ${ACCESS_HUBDB_02}`, 
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    values: {
+                      subscription_name: getNewProductName,
+                    }
+                  })
+                };
+                try {
+                  const updateRowResponse = await fetch(updateRowUrl, updateRowOptions);
+                  const updateRowData = await updateRowResponse.json();
+                  // 3 Publish Update Row Table
+                  if(updateRowData){
+                    const publishHubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/draft/publish';
+                    const tokenHubDb03 = await setHubSpotToken(updatedportalId);
+                    const ACCESS_HUBDB_03 = tokenHubDb03.access_token;
+                    const publishHubDboptions = {
+                      method: 'POST', 
+                      headers: {
+                        Authorization: `Bearer ${ACCESS_HUBDB_03}`}
+                      };
+                    try {
+                        const publishHubDbResponse = await fetch(publishHubDbUrl, publishHubDboptions);
+                        const publishHubDbData = await publishHubDbResponse.json();
+                        if(publishHubDbData){
+                            console.log('HubDb Row updated!')
+                        }
+                    } catch (error) {
+                    console.error(error);
+                    }
+                  }
+                } catch (error) {
+                  console.error(error);
+                }
+              }
+            } catch (error) {
+              console.error(error);
+            }
+            // ----- UPDATE SUBSCRIPTION METADATA -----
+            const updateSubscriptionMetadata = await stripe.subscriptions.update(
+              updatedSubscriptionId,
+              {
+                metadata: {
+                  priceId: newPriceId,
+                  productId: getNewProductId,
+                  product_name: getNewProductName,
+                },
+              }
+            );
+          }
+          
           break;
   
         case 'customer.subscription.deleted':
-          // canceled by you or customer
           break;
   
         case 'customer.subscription.paused':
