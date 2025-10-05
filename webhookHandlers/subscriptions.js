@@ -1586,7 +1586,7 @@ function isPriceChange(sub) {
         pdfData = pdfData.replaceAll('"', '');
         const buffer = Buffer.from(pdfData, "base64")
 
-        // 2 Upload to HubSpot Files using folderId
+        // 5 Upload to HubSpot Files using folderId
         const fileName = `INV-${invoiceYear}-${setInvoiceSuffix}.pdf`;
         createPdf.append('fileName', fileName);
         createPdf.append('file', buffer, fileName);
@@ -1596,7 +1596,7 @@ function isPriceChange(sub) {
         }));
         createPdf.append('folderId', '282421374140');
         
-        // 5 Insert PDF into Files
+        // 6 Insert PDF into Files
         const tokenPdf01 = await setHubSpotToken(getPortalId);
         const ACCESS_TOKEN_PDF_01 = tokenPdf01.access_token;
         const client =  axios.create({
@@ -1622,8 +1622,8 @@ function isPriceChange(sub) {
         console.log('File uploaded!');
         let setPdfUrl = getPdfUrl.replace('https://146896786.fs1.hubspotusercontent-eu1.net', 'https://nbd-shop.nenad-code.dev');
 
-        // ----- 08 Create Record in Custom Object INVOICE -----
-        // 6 Prepare Invoice Custom Object Body
+        // ----- 02 Create Record in Custom Object INVOICE -----
+        // 1 Prepare Invoice Custom Object Body
         const invoiceBody = {
           properties: {
             invoice_year: invoiceYear,
@@ -1658,7 +1658,7 @@ function isPriceChange(sub) {
         console.log('Invoice Body:');
         console.log(invoiceBody.properties);
 
-        // 7 Create Invoice Custom Object Record
+        // 2 Create Invoice Custom Object Record
         const createInvoiceUrl = 'https://api.hubapi.com/crm/v3/objects/2-192773368';
         const tokenInv02 = await setHubSpotToken(getPortalId);
         const ACCESS_TOKEN_INV_02 = tokenInv02.access_token;
@@ -1684,14 +1684,15 @@ function isPriceChange(sub) {
           console.error('Fetch error creating deal:', err);
         }
 
-        // 8 Create Note for Invoice Custom Object Record and associte to it Invoice PDF
+        // 3 Create Note for Invoice Custom Object Record and associte to it Invoice PDF
+        const noteOwner = '44516880';
         const noteUrl = 'https://api.hubapi.com/crm/v3/objects/notes';
         let createNoteBody = '<div style="" dir="auto" data-top-level="true"><p style="margin:0;"><strong><span style="color: #151E21;">INV-' + invoiceYear + '-' + setInvoiceSuffix + '</span></strong></p></div>';
         const noteBody = {
           properties: {
             hs_timestamp: Number(getPaymentDate * 1000),
             hs_note_body: createNoteBody,
-            hubspot_owner_id: dealOwner,
+            hubspot_owner_id: noteOwner,
             hs_attachment_ids: getPdfId
           },
           associations: [
@@ -1779,14 +1780,13 @@ function isPriceChange(sub) {
           }
         }
 
-        //----- Update Contact to get Membership and with PDF data to send Marketing Email
+        //----- Update Contact to get PDF data to send Marketing Email
         const updateContactWithPdfUrl = 'https://api.hubapi.com/crm/v3/objects/contacts/' + getContactId;
         const updateContactWithPdfBody = {
           properties: {
             invoice_number: String('INV-' + invoiceYear + '-' + setInvoiceSuffix),
             invoice_pdf_url: setPdfUrl,
             invoice_pdf_id: getPdfId,
-            has_subscriptions: 'Yes',
             subscription_status: 'Ongoing',
             subscription_product_name: getProductName,
           },
