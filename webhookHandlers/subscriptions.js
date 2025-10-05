@@ -1462,7 +1462,7 @@ function isPriceChange(sub) {
       if ((event.type === 'invoice.created' || event.type === 'invoice.finalized' || event.type === 'invoice.payment_succeeded') && invoice.billing_reason === 'subscription_update') {
         let getPortalId = String(invoice.subscription_details.metadata.hsPortalId || '').trim();
         let getPayerType = String(invoice.subscription_details.metadata.payer_type || '').trim();
-        let getContactId = String(invoice.subscription_details.hsContactId || '').trim();
+        let getContactId = String(invoice.subscription_details.metadata.hsContactId || '').trim();
         let getEmail = String(invoice.subscription_details.metadata.email || '').trim();
         let getFullName = String(invoice.subscription_details.metadata.full_name || '').trim();
         let getAddress = String(invoice.customer_address.line1 || '').trim();
@@ -1484,11 +1484,6 @@ function isPriceChange(sub) {
         let getProductName = String(invoice.subscription_details.metadata.product_name || '').trim();
         let getSripeCustomerId = String(invoice.customer || '').trim();
         let getStripeSubscriptionId = String(invoice.subscription || '').trim();
-        let getStripeSubscriptionStatus = 'active';
-        let getCurrentPeriodStart = Number(invoice.lines.data[0].period.start * 1000);
-        let setCurrentPeriodStart = stripeSecondsToHubSpotDatePicker(invoice.lines.data[0].period.start);
-        let getCurrentPeriodEnd = Number(invoice.lines.data[0].period.end * 1000);
-        let setCurrentPeriodEnd = stripeSecondsToHubSpotDatePicker(invoice.lines.data[0].period.end);
         let getPaymentDate = Number(invoice.created);
         let getAmount = Number((invoice.amount_paid / 100).toFixed(2));
         const paymentIntentId = String(invoice.payment_intent || '').trim();
@@ -1501,17 +1496,13 @@ function isPriceChange(sub) {
         let getFirstLiDescription = String(firstLineItem.description || '');
         let getFirstLiAmount = firstLineItem.amount;
         let setFirstLiAmount = Number((getFirstLiAmount / 100).toFixed(2));
-        let getFirstLiPeriodStart = Number(firstLineItem.period.start * 1000);
         let setFirstLiPeriodStart = stripeSecondsToHubSpotDatePicker(firstLineItem.period.start);
-        let getFirstLiPeriodEnd = Number(firstLineItem.period.end * 1000);
         let setFirstLiPeriodEnd = stripeSecondsToHubSpotDatePicker(firstLineItem.period.end);
         // Second Line Item
         let getSecondLiDescription = String(secondLineItem.description || '');
         let getSecondLiAmount = secondLineItem.amount;
         let setSecondLiAmount = Number((getSecondLiAmount / 100).toFixed(2));
-        let getSecondLiPeriodStart = Number(secondLineItem.period.start * 1000);
         let setSecondLiPeriodStart = stripeSecondsToHubSpotDatePicker(secondLineItem.period.start);
-        let getSecondLiPeriodEnd = Number(secondLineItem.period.end * 1000);
         let setSecondLiPeriodEnd = stripeSecondsToHubSpotDatePicker(secondLineItem.period.end);
 
         // ----- 01 Create Invoice PDF and Invoice Custom Object for PRORATION IS ALWAYS INVOICE -----
