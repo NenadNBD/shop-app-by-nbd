@@ -1457,6 +1457,361 @@ function isPriceChange(sub) {
         // Optionally push to HubSpot or your DB
         // amount = dollars(invoice.amount_paid, invoice.currency)
       }
+
+      // ----- INVOICE ON SUBSCRIPTION UPDATE WHEN PRORATION IS ALWAYS INVOICE -----
+      if ((event.type === 'invoice.created' || event.type === 'invoice.finalized' || event.type === 'invoice.payment_succeeded') && invoice.billing_reason === 'subscription_update') {
+        let getPortalId = String(invoice.subscription_details.metadata.hsPortalId || '').trim();
+        let getPayerType = String(invoice.subscription_details.metadata.payer_type || '').trim();
+        let getContactId = String(invoice.subscription_details.hsContactId || '').trim();
+        let getEmail = String(invoice.subscription_details.metadata.email || '').trim();
+        let getFullName = String(invoice.subscription_details.metadata.full_name || '').trim();
+        let getAddress = String(invoice.customer_address.line1 || '').trim();
+        let getCity = String(invoice.customer_address.city || '').trim();
+        let getZip = String(invoice.customer_address.postal_code || '').trim();
+        let getState = String(invoice.customer_address.state || '').trim();
+        let getCountry = String(invoice.customer_address.country || '').trim();
+        let setState = getCountry.toUpperCase() === 'US' ? usStateName(getState) : getCountry || '';
+        let setCountry = countryName(getCountry);
+        let getCompanyName;
+        let getCompanyId;
+        if(getPayerType === 'company'){
+          getCompanyName = String(invoice.subscription_details.metadata.company || '').trim();
+          getCompanyId = String(invoice.subscription_details.metadata.hsCompanyId || '').trim();
+        }else{
+          getCompanyName = '';
+          getCompanyId = '';
+        }
+        let getProductName = String(invoice.subscription_details.metadata.product_name || '').trim();
+        let getSripeCustomerId = String(invoice.customer || '').trim();
+        let getStripeSubscriptionId = String(invoice.subscription || '').trim();
+        let getStripeSubscriptionStatus = 'active';
+        let getCurrentPeriodStart = Number(invoice.lines.data[0].period.start * 1000);
+        let setCurrentPeriodStart = stripeSecondsToHubSpotDatePicker(invoice.lines.data[0].period.start);
+        let getCurrentPeriodEnd = Number(invoice.lines.data[0].period.end * 1000);
+        let setCurrentPeriodEnd = stripeSecondsToHubSpotDatePicker(invoice.lines.data[0].period.end);
+        let getPaymentDate = Number(invoice.created);
+        let getAmount = Number((invoice.amount_paid / 100).toFixed(2));
+        const paymentIntentId = String(invoice.payment_intent || '').trim();
+        const getChargeId = String(invoice.charge || '').trim();;
+        const charge = await stripe.charges.retrieve(getChargeId);
+        let getPaymentMethodType = String(charge.payment_method_details.type || '').trim();
+        const firstLineItem = invoice.lines.data[0];
+        const secondLineItem = invoice.lines.data[1];
+        // First Line Item
+        let getFirstLiDescription = String(firstLineItem.description || '');
+        let getFirstLiAmount = firstLineItem.amount;
+        let setFirstLiAmount = Number((getFirstLiAmount / 100).toFixed(2));
+        let getFirstLiPeriodStart = Number(firstLineItem.period.start * 1000);
+        let setFirstLiPeriodStart = stripeSecondsToHubSpotDatePicker(firstLineItem.period.start);
+        let getFirstLiPeriodEnd = Number(firstLineItem.period.end * 1000);
+        let setFirstLiPeriodEnd = stripeSecondsToHubSpotDatePicker(firstLineItem.period.end);
+        // Second Line Item
+        let getSecondLiDescription = String(secondLineItem.description || '');
+        let getSecondLiAmount = secondLineItem.amount;
+        let setSecondLiAmount = Number((getSecondLiAmount / 100).toFixed(2));
+        let getSecondLiPeriodStart = Number(secondLineItem.period.start * 1000);
+        let setSecondLiPeriodStart = stripeSecondsToHubSpotDatePicker(secondLineItem.period.start);
+        let getSecondLiPeriodEnd = Number(secondLineItem.period.end * 1000);
+        let setSecondLiPeriodEnd = stripeSecondsToHubSpotDatePicker(secondLineItem.period.end);
+
+        // ----- 01 Create Invoice PDF and Invoice Custom Object for PRORATION IS ALWAYS INVOICE -----
+        // 1 Search previous Invoices to get Invoice Sufix
+        const tokenInv01 = await setHubSpotToken(getPortalId);
+        const ACCESS_TOKEN_INV_01 = tokenInv01.access_token;
+        const invoiceYear = new Date().getFullYear();
+        const startSuffix = 1000;
+        const lastInvoiceSuffix = await searchInvoicesByYear(ACCESS_TOKEN_INV_01, invoiceYear);
+        console.log(lastInvoiceSuffix);
+        const setInvoiceSuffix = lastInvoiceSuffix != null ? lastInvoiceSuffix + 1 : startSuffix;
+        
+        // 2 Prepare Invoice Body
+        let setBillToName;
+        if(getPayerType === 'company'){
+          setBillToName = getCompanyName;
+        }else if(getPayerType === 'individual'){
+          setBillToName = getFullName;
+        }
+        const paymentMethodLabels = {
+          card: 'Card',
+          google_pay: 'GooglePay',   // as you prefer (no space)
+          apple_pay: 'Apple Pay',
+          us_bank_account: 'US Bank Account'
+        };
+        let firstStringActiveBillingCycle = `${formatInvoiceDate(setFirstLiPeriodStart) ?? ''} - ${formatInvoiceDate(setFirstLiPeriodEnd) ?? ''}`;
+        let secondStringActiveBillingCycle = `${formatInvoiceDate(setSecondLiPeriodStart) ?? ''} - ${formatInvoiceDate(setSecondLiPeriodEnd) ?? ''}`;
+
+        // 3 Prepare Body to print Invoice PDF
+        const printInvoice = {
+          invoice_number: `INV-${invoiceYear}-${setInvoiceSuffix}`,
+          issue_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
+          due_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
+          statement_descriptor: "Stripe",
+          payment_id: paymentIntentId,
+          payment_method: paymentMethodLabels[getPaymentMethodType] ?? getPaymentMethodType,
+          status: "Proration Paid",
+          subtotal: getAmount,
+          tax: 0.00,
+          total: getAmount,
+          amount_paid: getAmount,
+          balance_due: 0.00,
+          seller: {
+            name: "No Bounds Digital",
+            address_line1: "328 W High St",
+            city: "Elizabethtown",
+            state: "Pennsylvania",
+            postal_code: "17022",
+            country: "United States",
+            email: "nenad@noboundsdigital"
+          },
+          bill_to: {
+            name: setBillToName,
+            email: getEmail,
+            address_line1: getAddress,
+            city: getCity,
+            state: setState,
+            postal_code: getZip,
+            country: setCountry
+          },
+          line_items: [
+            { name: getFirstLiDescription, quantity: 1, unit_price: setFirstLiAmount, type: 'subscription', billing_cycle: firstStringActiveBillingCycle },
+            { name: getSecondLiDescription, quantity: 1, unit_price: setSecondLiAmount, type: 'subscription', billing_cycle: secondStringActiveBillingCycle },
+          ],
+          // You can compute these or pass them precomputed
+        };
+
+        // 4 Build PDF (Buffer)
+        const createPdf = new FormData();
+        const pdfDataUri = await prepareInvoice(printInvoice);
+        let pdfData = pdfDataUri.replaceAll("data:application/pdf;filename=generated.pdf;base64,","");
+        pdfData = pdfData.replaceAll('"', '');
+        const buffer = Buffer.from(pdfData, "base64")
+
+        // 2 Upload to HubSpot Files using folderId
+        const fileName = `INV-${invoiceYear}-${setInvoiceSuffix}.pdf`;
+        createPdf.append('fileName', fileName);
+        createPdf.append('file', buffer, fileName);
+        createPdf.append('options', JSON.stringify({
+          "access":  "PUBLIC_NOT_INDEXABLE",
+          "overwrite": false
+        }));
+        createPdf.append('folderId', '282421374140');
+        
+        // 5 Insert PDF into Files
+        const tokenPdf01 = await setHubSpotToken(getPortalId);
+        const ACCESS_TOKEN_PDF_01 = tokenPdf01.access_token;
+        const client =  axios.create({
+          baseURL: 'https://api.hubapi.com',
+          headers: { 
+            accept: 'application/json', 
+            Authorization: `Bearer ${ACCESS_TOKEN_PDF_01}`
+          }
+        });
+        
+        let getPdfId;
+        let getPdfUrl;
+        try {
+          const ApiResponse2 = await client.post('/files/v3/files', createPdf, {
+            headers: createPdf.getHeaders()
+          });
+          getPdfId = ApiResponse2.data.id;
+          getPdfUrl = ApiResponse2.data.url;
+        } catch (err) {
+          console.error(err);
+          throw err;
+        }
+        console.log('File uploaded!');
+        let setPdfUrl = getPdfUrl.replace('https://146896786.fs1.hubspotusercontent-eu1.net', 'https://nbd-shop.nenad-code.dev');
+
+        // ----- 08 Create Record in Custom Object INVOICE -----
+        // 6 Prepare Invoice Custom Object Body
+        const invoiceBody = {
+          properties: {
+            invoice_year: invoiceYear,
+            invoice_number_sufix: setInvoiceSuffix,
+            invoice_number: `INV-${invoiceYear}-${setInvoiceSuffix}`,
+            issue_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
+            due_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
+            status: 'Proration Paid',
+            statement_descriptor: 'Stripe',
+            transaction_type: 'Subscription',
+            payment_id: paymentIntentId,
+            payment_method: paymentMethodLabels[getPaymentMethodType] ?? getPaymentMethodType,
+            product: getProductName,
+            quantity: 1,
+            amount_subtotal: getAmount,
+            amount_due: getAmount,
+            amount_total: getAmount,
+            bill_to_name: setBillToName,
+            bill_to_email: getEmail,
+            bill_to_address: getAddress,
+            bill_to_city: getCity,
+            bill_to_postal_code: getZip,
+            bill_to_state: setState,
+            bill_to_country: setCountry,
+            stripe_customer_id: getSripeCustomerId,
+            stripe_subscription_id: getStripeSubscriptionId,
+            contact_id: getContactId,
+            printed_invoice_id: getPdfId,
+            printed_invoice_url: setPdfUrl,
+          }
+        };
+        console.log('Invoice Body:');
+        console.log(invoiceBody.properties);
+
+        // 7 Create Invoice Custom Object Record
+        const createInvoiceUrl = 'https://api.hubapi.com/crm/v3/objects/2-192773368';
+        const tokenInv02 = await setHubSpotToken(getPortalId);
+        const ACCESS_TOKEN_INV_02 = tokenInv02.access_token;
+        let getInvoiceId;
+        const createInvoiceOptions = {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${ACCESS_TOKEN_INV_02}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(invoiceBody)
+        };
+        try {
+          const invoiceRes = await fetch(createInvoiceUrl, createInvoiceOptions);
+          const invoiceData = await invoiceRes.json();
+          getInvoiceId = invoiceData.id;
+          if (!invoiceRes.ok) {
+            console.error('Invoice create failed:', invoiceRes.status, invoiceData);
+          } else {
+            console.log('Deal created');
+          }
+        } catch (err) {
+          console.error('Fetch error creating deal:', err);
+        }
+
+        // 8 Create Note for Invoice Custom Object Record and associte to it Invoice PDF
+        const noteUrl = 'https://api.hubapi.com/crm/v3/objects/notes';
+        let createNoteBody = '<div style="" dir="auto" data-top-level="true"><p style="margin:0;"><strong><span style="color: #151E21;">INV-' + invoiceYear + '-' + setInvoiceSuffix + '</span></strong></p></div>';
+        const noteBody = {
+          properties: {
+            hs_timestamp: Number(getPaymentDate * 1000),
+            hs_note_body: createNoteBody,
+            hubspot_owner_id: dealOwner,
+            hs_attachment_ids: getPdfId
+          },
+          associations: [
+            {
+              to: {
+                id: getInvoiceId
+              },
+              types: [
+                {
+                  associationCategory: "USER_DEFINED",
+                  associationTypeId: 14
+                } 
+              ]
+            }
+          ]
+        };
+        const tokenNote01 = await setHubSpotToken(getPortalId);
+        const ACCESS_TOKEN_NOTE_01 = tokenNote01.access_token;
+        const createNoteOptions = {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${ACCESS_TOKEN_NOTE_01}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(noteBody)
+        };
+        
+        try {
+          const noteResponse = await fetch(noteUrl, createNoteOptions);
+          const noteData = await noteResponse.json();
+          if(noteData){
+            console.log('Note is created and associated with Invoice PDF to Invoice Object');
+          }
+        } catch (error) {
+          console.error(error);
+        }
+
+        //----- Associate Invoice Custom Object to Contact ---
+        const invoiceToContactUrl = 'https://api.hubapi.com/crm/v4/objects/2-192773368/' + getInvoiceId + '/associations/contacts/' + getContactId;
+        const tokenAssociation01 = await setHubSpotToken(getPortalId);
+        const ACCESS_TOKEN_ASSOCIATION_01 = tokenAssociation01.access_token;
+        const invoiceToContactOptions = {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${ACCESS_TOKEN_ASSOCIATION_01}`, 
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify([
+            { associationCategory: 'USER_DEFINED', associationTypeId:26 }
+          ])
+        };
+        try {
+          const invoiceToContactRes = await fetch(invoiceToContactUrl, invoiceToContactOptions);
+          const invoiceToContactData = await invoiceToContactRes.json();
+          if(invoiceToContactData){
+            console.log('Invoice is associated to Contact');
+          }
+        } catch (error) {
+          console.error(error);
+        }
+
+        //----- Associate Invoice Custom Object to Company ---
+        if(getPayerType === 'company' && getCompanyId){
+          const invoiceToCompanyUrl = 'https://api.hubapi.com/crm/v4/objects/2-192773368/' + getInvoiceId + '/associations/companies/' + getCompanyId;
+          const tokenAssociation02 = await setHubSpotToken(getPortalId);
+          const ACCESS_TOKEN_ASSOCIATION_02 = tokenAssociation02.access_token;
+          const invoiceToCompanyOptions = {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${ACCESS_TOKEN_ASSOCIATION_02}`, 
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify([
+              { associationCategory: 'USER_DEFINED', associationTypeId:30 }
+            ])
+          };
+          try {
+            const invoiceToCompanyRes = await fetch(invoiceToCompanyUrl, invoiceToCompanyOptions);
+            const invoiceToCompanyData = await invoiceToCompanyRes.json();
+            if(invoiceToCompanyData){
+              console.log('Invoice is associated to Company');
+            }
+          } catch (error) {
+            console.error(error);
+          }
+        }
+
+        //----- Update Contact to get Membership and with PDF data to send Marketing Email
+        const updateContactWithPdfUrl = 'https://api.hubapi.com/crm/v3/objects/contacts/' + getContactId;
+        const updateContactWithPdfBody = {
+          properties: {
+            invoice_number: String('INV-' + invoiceYear + '-' + setInvoiceSuffix),
+            invoice_pdf_url: setPdfUrl,
+            invoice_pdf_id: getPdfId,
+            has_subscriptions: 'Yes',
+            subscription_status: 'Ongoing',
+            subscription_product_name: getProductName,
+          },
+        };
+        const tokenUpdateContactWithPdf = await setHubSpotToken(getPortalId);
+        const ACCESS_TOKEN_UPDATE_CONTACT_WITH_PDF = tokenUpdateContactWithPdf.access_token;
+        const updateContactWithPdfOptions = {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${ACCESS_TOKEN_UPDATE_CONTACT_WITH_PDF}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(updateContactWithPdfBody)
+        };
+
+        try {
+          const updateContactWithPdfRes = await fetch(updateContactWithPdfUrl, updateContactWithPdfOptions);
+          const updateContactWithPdfData = await updateContactWithPdfRes.json();
+          if(updateContactWithPdfData){
+            console.log('Contact is ready to send Invoice Marketing Email');
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      }
   
       if (event.type === 'invoice.payment_failed') {
         if (invoice.billing_reason === 'subscription_cycle') {
