@@ -277,7 +277,7 @@ async function prepareInvoice(printInvoice) {
     // Main Paid Info Table
     const paidInfoRows = [];
     paidInfoRows.push(`Status: ${printInvoice.status ?? ''}`);
-    if (printInvoice.status === 'Paid') {
+    if (printInvoice.status === 'Paid' || printInvoice.status === 'Proration Paid') {
       paidInfoRows.push(`${money(printInvoice.total)} due ${formatInvoiceDate(printInvoice.issue_date)}`);
     }
     autoTable(doc, {
