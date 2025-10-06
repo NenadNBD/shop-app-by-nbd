@@ -1460,7 +1460,7 @@ function isPriceChange(sub) {
           // 2 Fetch HubDb Row to get Status: ACTIVE VS TRIAL
           let cycleHubDbRowId;
           let cycleHubDbRowStatus;
-            const cycleHubDbRowUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows?properties=hs_id&properties=subscription_status&contact_id__eq=' + cycleContactId + '&customer_id__eq=' + cycleStripeCustomerId + '&subscription_id__eq=' + cycleStripeSubscriptionId;
+            const cycleHubDbRowUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows?properties=subscription_status&contact_id__eq=' + cycleContactId + '&customer_id__eq=' + cycleStripeCustomerId + '&subscription_id__eq=' + cycleStripeSubscriptionId;
             const tokenCycleHubDb01 = await setHubSpotToken(cyclePortalId);
             const ACCESS_CYCLE_HUBDB_01 = tokenCycleHubDb01.access_token;
             const cycleHubDbRowOptions = {
@@ -1472,12 +1472,12 @@ function isPriceChange(sub) {
             try {
               const cycleHubDbRowResponse = await fetch(cycleHubDbRowUrl, cycleHubDbRowOptions);
               const cycleHubDbRowData = await cycleHubDbRowResponse.json();
-              console.log(cycleHubDbRowData);
-              cycleHubDbRowId = cycleHubDbRowData.results[0].hs_id;
-              cycleHubDbRowStatus = cycleHubDbRowData.results[0].subscription_status.name;
+              cycleHubDbRowId = cycleHubDbRowData.results[0].id;
+              cycleHubDbRowStatus = cycleHubDbRowData.results[0].values.subscription_status.name;
             } catch (error) {
               console.error(error);
             }
+            console.log('Subscription Status from HubDb Row Id:',cycleHubDbRowId);
             console.log('Subscription Status from HubDb:',cycleHubDbRowStatus);
 
             // 3 Get the rest of Info
@@ -1633,7 +1633,7 @@ function isPriceChange(sub) {
           createPdf.append('folderId', '282421374140');
           
           // 5 Insert PDF into Files
-          const tokenPdf01 = await setHubSpotToken(getPortalId);
+          const tokenPdf01 = await setHubSpotToken(cyclePortalId);
           const ACCESS_TOKEN_PDF_01 = tokenPdf01.access_token;
           const client =  axios.create({
             baseURL: 'https://api.hubapi.com',
