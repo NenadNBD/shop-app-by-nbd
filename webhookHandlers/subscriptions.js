@@ -436,7 +436,7 @@ function isPriceChange(sub) {
 
             let stringActiveBillingCycle = `${formatInvoiceDate(setTrialStart) ?? ''} - ${formatInvoiceDate(setTrialEnd) ?? ''}`;
 
-            // 3 Prepare Body to print Invoice PDF
+            // 3 Prepare Body to print Invoice PDF - TRIAL
             const printInvoice = {
               invoice_number: `INV-${invoiceYear}-${setInvoiceSuffix}`,
               issue_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
@@ -949,7 +949,7 @@ function isPriceChange(sub) {
             const pdfItem = {
               name: l.metadata.product_name || l.description || 'Line item',
               quantity: 1,
-              unit_price: l.price?.unit_amount != null ? centsToDollars(l.price.unit_amount) : centsToDollars(l.amount / 1),
+              unit_price: centsToDollars(l.amount),
               type: 'subscription'
             };
             if (l?.period?.start && l?.period?.end) {
@@ -1212,7 +1212,7 @@ function isPriceChange(sub) {
             us_bank_account: 'US Bank Account'
           };
 
-          // 3 Prepare Body to print Invoice PDF
+          // 3 Prepare Body to print Invoice PDF - Subscription Created
           const printInvoice = {
             invoice_number: `INV-${invoiceYear}-${setInvoiceSuffix}`,
             issue_date: stripeSecondsToHubSpotDatePicker(getPaymentDate),
@@ -1560,7 +1560,7 @@ function isPriceChange(sub) {
               const pdfItem = {
                 name: l.metadata.product_name || l.description || 'Line item',
                 quantity: 1,
-                unit_price: l.price?.unit_amount != null ? centsToDollars(l.price.unit_amount) : centsToDollars(l.amount / 1),
+                unit_price: centsToDollars(l.amount),
                 type: 'subscription'
               };
               if (l?.period?.start && l?.period?.end) {
@@ -1980,7 +1980,7 @@ function isPriceChange(sub) {
           const pdfItem = {
             name: l.description || l.metadata.product_name || 'Line item',
             quantity: 1,
-            unit_price: l.price?.unit_amount != null ? centsToDollars(l.price.unit_amount) : centsToDollars(l.amount / 1),
+            unit_price: centsToDollars(l.amount),
             type: 'subscription'
           };
           if (l?.period?.start && l?.period?.end) {
