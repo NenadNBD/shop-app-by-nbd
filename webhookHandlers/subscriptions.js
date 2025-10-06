@@ -123,6 +123,20 @@ function formatInvoiceDate(ms) {
   }).format(d);
 }
 
+const centsToDollars = n => Number((n / 100).toFixed(2));
+const fmt = s => formatInvoiceDate?.(s) ?? '';
+
+function getLatestPeriodEndMs(lines) {
+  let maxEnd = null;
+  for (const l of lines) {
+    const endSec = Number(l?.period?.end);
+    if (Number.isFinite(endSec)) {
+      if (maxEnd === null || endSec > maxEnd) maxEnd = endSec;
+    }
+  }
+  return maxEnd != null ? Number(maxEnd * 1000) : undefined; // convert sec→ms
+}
+
 // Utility Function to detect if Subscription is Upgraded/Downgraded
 function isPriceChange(sub) {
   const newPriceId = String(sub.items.data[0].price.id || '');
@@ -914,16 +928,37 @@ function isPriceChange(sub) {
           let getSripeCustomerId = String(invoice.customer || '').trim();
           let getStripeSubscriptionId = String(invoice.subscription || '').trim();
           let getStripeSubscriptionStatus = 'active';
+          /*
           let getCurrentPeriodStart = Number(invoice.lines.data[0].period.start * 1000);
           let setCurrentPeriodStart = stripeSecondsToHubSpotDatePicker(invoice.lines.data[0].period.start);
           let getCurrentPeriodEnd = Number(invoice.lines.data[0].period.end * 1000);
           let setCurrentPeriodEnd = stripeSecondsToHubSpotDatePicker(invoice.lines.data[0].period.end);
+          */
           let getPaymentDate = Number(invoice.created);
           let getAmount = Number((invoice.amount_paid / 100).toFixed(2));
           const paymentIntentId = String(invoice.payment_intent || '').trim();
           const getChargeId = String(invoice.charge || '').trim();;
           const charge = await stripe.charges.retrieve(getChargeId);
           let getPaymentMethodType = String(charge.payment_method_details.type || '').trim();
+
+          // Handle Line Items - Non-zero lines only
+          const stripeLineItems = invoice?.lines?.data ?? [];
+          const nonZeroLineItems = stripeLineItems.filter(fli => Number(fli.amount) !== 0);
+          // Build line_items with per-line billing_cycle when available
+          const line_items = nonZeroLineItems.map(l => {
+            const pdfItem = {
+              name: l.metadata.product_name || l.description || 'Line item',
+              quantity: 1,
+              unit_price: l.price?.unit_amount != null ? centsToDollars(l.price.unit_amount) : centsToDollars(l.amount / 1),
+              type: 'subscription'
+            };
+            if (l?.period?.start && l?.period?.end) {
+              pdfItem.billing_cycle = `${fmt(Number(l.period.start * 1000))} - ${fmt(Number(l.period.end * 1000))}`;
+            }
+            return pdfItem;
+          });
+
+          let getCurrentPeriodEnd = getLatestPeriodEndMs(nonZeroLineItems);
 
           // ----- 01 Search HubSpot for Contact ID -----
           const tokenInfo01 = await setHubSpotToken(getPortalId);
@@ -1176,7 +1211,6 @@ function isPriceChange(sub) {
             apple_pay: 'Apple Pay',
             us_bank_account: 'US Bank Account'
           };
-          let stringActiveBillingCycle = `${formatInvoiceDate(setCurrentPeriodStart) ?? ''} - ${formatInvoiceDate(setCurrentPeriodEnd) ?? ''}`;
 
           // 3 Prepare Body to print Invoice PDF
           const printInvoice = {
@@ -1210,10 +1244,7 @@ function isPriceChange(sub) {
               postal_code: getZip,
               country: setCountry
             },
-            line_items: [
-              { name: getProductName, quantity: 1, unit_price: getAmount, type: 'subscription', billing_cycle: stringActiveBillingCycle },
-              // { name: "Support", description: "Sep 28–Oct 28", quantity: 1, unit_price: 49.00 },
-            ],
+            line_items
             // You can compute these or pass them precomputed
           };
 
@@ -1501,10 +1532,12 @@ function isPriceChange(sub) {
               cycleCompanyId = '';
             }
             let cycleProductName = String(invoice.subscription_details.metadata.product_name || '').trim();
+            /*
             let cycleCurrentPeriodStart = Number(invoice.lines.data[0].period.start * 1000);
             let setCycleCurrentPeriodStart = stripeSecondsToHubSpotDatePicker(invoice.lines.data[0].period.start);
             let cycleCurrentPeriodEnd = Number(invoice.lines.data[0].period.end * 1000);
             let setCycleCurrentPeriodEnd = stripeSecondsToHubSpotDatePicker(invoice.lines.data[0].period.end);
+            */
             let cyclePaymentDate = Number(invoice.created);
             let cycleAmount = Number((invoice.amount_paid / 100).toFixed(2));
             let cyclePaymentIntentId = String(invoice.payment_intent || '').trim();
@@ -1519,6 +1552,25 @@ function isPriceChange(sub) {
               cycleStripeSubscriptionStatus = 'Ongoing';
             }
 
+            // Handle Line Items - Non-zero lines only
+            const stripeLineItems = invoice?.lines?.data ?? [];
+            const nonZeroLineItems = stripeLineItems.filter(fli => Number(fli.amount) !== 0);
+            // Build line_items with per-line billing_cycle when available
+            const line_items = nonZeroLineItems.map(l => {
+              const pdfItem = {
+                name: l.metadata.product_name || l.description || 'Line item',
+                quantity: 1,
+                unit_price: l.price?.unit_amount != null ? centsToDollars(l.price.unit_amount) : centsToDollars(l.amount / 1),
+                type: 'subscription'
+              };
+              if (l?.period?.start && l?.period?.end) {
+                pdfItem.billing_cycle = `${fmt(Number(l.period.start * 1000))} - ${fmt(Number(l.period.end * 1000))}`;
+              }
+              return pdfItem;
+            });
+
+            let cycleCurrentPeriodEnd = getLatestPeriodEndMs(nonZeroLineItems);
+            
             // ----- UPDATE DEAL STAGE IF TRIAL TO ACTIVE -----
             if(cycleHubDbRowStatus === 'trialing'){
               const cycleTrialDealBody = {
@@ -1575,7 +1627,6 @@ function isPriceChange(sub) {
             apple_pay: 'Apple Pay',
             us_bank_account: 'US Bank Account'
           };
-          let cycleStringActiveBillingCycle = `${formatInvoiceDate(setCycleCurrentPeriodStart) ?? ''} - ${formatInvoiceDate(setCycleCurrentPeriodEnd) ?? ''}`;
 
           // 3 Prepare Body to print Invoice PDF
           const printInvoice = {
@@ -1609,9 +1660,7 @@ function isPriceChange(sub) {
               postal_code: cycleZip,
               country: setCycleCountry
             },
-            line_items: [
-              { name: cycleProductName, quantity: 1, unit_price: cycleAmount, type: 'subscription', billing_cycle: cycleStringActiveBillingCycle },
-            ],
+            line_items
             // You can compute these or pass them precomputed
           };
 
@@ -1923,20 +1972,24 @@ function isPriceChange(sub) {
         const getChargeId = String(invoice.charge || '').trim();;
         const charge = await stripe.charges.retrieve(getChargeId);
         let getPaymentMethodType = String(charge.payment_method_details.type || '').trim();
-        const firstLineItem = invoice.lines.data[0];
-        const secondLineItem = invoice.lines.data[1];
-        // First Line Item
-        let getFirstLiDescription = String(firstLineItem.description || '');
-        let getFirstLiAmount = firstLineItem.amount;
-        let setFirstLiAmount = Number((getFirstLiAmount / 100).toFixed(2));
-        let setFirstLiPeriodStart = stripeSecondsToHubSpotDatePicker(firstLineItem.period.start);
-        let setFirstLiPeriodEnd = stripeSecondsToHubSpotDatePicker(firstLineItem.period.end);
-        // Second Line Item
-        let getSecondLiDescription = String(secondLineItem.description || '');
-        let getSecondLiAmount = secondLineItem.amount;
-        let setSecondLiAmount = Number((getSecondLiAmount / 100).toFixed(2));
-        let setSecondLiPeriodStart = stripeSecondsToHubSpotDatePicker(secondLineItem.period.start);
-        let setSecondLiPeriodEnd = stripeSecondsToHubSpotDatePicker(secondLineItem.period.end);
+        // Handle Line Items - Non-zero lines only
+        const stripeLineItems = invoice?.lines?.data ?? [];
+        const nonZeroLineItems = stripeLineItems.filter(fli => Number(fli.amount) !== 0);
+        // Build line_items with per-line billing_cycle when available
+        const line_items = nonZeroLineItems.map(l => {
+          const pdfItem = {
+            name: l.description || l.metadata.product_name || 'Line item',
+            quantity: 1,
+            unit_price: l.price?.unit_amount != null ? centsToDollars(l.price.unit_amount) : centsToDollars(l.amount / 1),
+            type: 'subscription'
+          };
+          if (l?.period?.start && l?.period?.end) {
+            pdfItem.billing_cycle = `${fmt(Number(l.period.start * 1000))} - ${fmt(Number(l.period.end * 1000))}`;
+          }
+          return pdfItem;
+        });
+
+        let cycleCurrentPeriodEnd = getLatestPeriodEndMs(nonZeroLineItems);
 
         // ----- 01 Create Invoice PDF and Invoice Custom Object for PRORATION IS ALWAYS INVOICE -----
         // 1 Search previous Invoices to get Invoice Sufix
@@ -1961,8 +2014,6 @@ function isPriceChange(sub) {
           apple_pay: 'Apple Pay',
           us_bank_account: 'US Bank Account'
         };
-        let firstStringActiveBillingCycle = `${formatInvoiceDate(setFirstLiPeriodStart) ?? ''} - ${formatInvoiceDate(setFirstLiPeriodEnd) ?? ''}`;
-        let secondStringActiveBillingCycle = `${formatInvoiceDate(setSecondLiPeriodStart) ?? ''} - ${formatInvoiceDate(setSecondLiPeriodEnd) ?? ''}`;
 
         // 3 Prepare Body to print Invoice PDF
         const printInvoice = {
@@ -1996,10 +2047,7 @@ function isPriceChange(sub) {
             postal_code: getZip,
             country: setCountry
           },
-          line_items: [
-            { name: getFirstLiDescription, quantity: 1, unit_price: setFirstLiAmount, type: 'subscription', billing_cycle: firstStringActiveBillingCycle },
-            { name: getSecondLiDescription, quantity: 1, unit_price: setSecondLiAmount, type: 'subscription', billing_cycle: secondStringActiveBillingCycle },
-          ],
+          line_items
           // You can compute these or pass them precomputed
         };
 
