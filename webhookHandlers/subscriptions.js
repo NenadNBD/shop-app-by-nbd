@@ -1460,7 +1460,7 @@ function isPriceChange(sub) {
           // 2 Fetch HubDb Row to get Status: ACTIVE VS TRIAL
           let cycleHubDbRowId;
           let cycleHubDbRowStatus;
-            const cycleHubDbRowUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows?contact_id__eq=' + cycleContactId + '&customer_id__eq=' + cycleStripeCustomerId + '&subscription_id__eq=' + cycleStripeSubscriptionId;
+            const cycleHubDbRowUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows?properties=hs_id&properties=subscription_status&contact_id__eq=' + cycleContactId + '&customer_id__eq=' + cycleStripeCustomerId + '&subscription_id__eq=' + cycleStripeSubscriptionId;
             const tokenCycleHubDb01 = await setHubSpotToken(cyclePortalId);
             const ACCESS_CYCLE_HUBDB_01 = tokenCycleHubDb01.access_token;
             const cycleHubDbRowOptions = {
@@ -1472,6 +1472,7 @@ function isPriceChange(sub) {
             try {
               const cycleHubDbRowResponse = await fetch(cycleHubDbRowUrl, cycleHubDbRowOptions);
               const cycleHubDbRowData = await cycleHubDbRowResponse.json();
+              console.log(cycleHubDbRowData);
               cycleHubDbRowId = cycleHubDbRowData.results[0].hs_id;
               cycleHubDbRowStatus = cycleHubDbRowData.results[0].subscription_status.name;
             } catch (error) {
@@ -1609,7 +1610,7 @@ function isPriceChange(sub) {
               country: setCycleCountry
             },
             line_items: [
-              { name: cycleProductName, quantity: 1, unit_price: getAmount, type: 'subscription', billing_cycle: cycleStringActiveBillingCycle },
+              { name: cycleProductName, quantity: 1, unit_price: cycleAmount, type: 'subscription', billing_cycle: cycleStringActiveBillingCycle },
             ],
             // You can compute these or pass them precomputed
           };
