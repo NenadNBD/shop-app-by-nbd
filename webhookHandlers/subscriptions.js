@@ -1294,8 +1294,6 @@ function isPriceChange(sub) {
               printed_invoice_url: setPdfUrl,
             }
           };
-          console.log('Invoice Body:');
-          console.log(invoiceBody.properties);
 
           // 7 Create Invoice Custom Object Record
           const createInvoiceUrl = 'https://api.hubapi.com/crm/v3/objects/2-192773368';
@@ -1452,7 +1450,441 @@ function isPriceChange(sub) {
           }
 
         } else if (invoice.billing_reason === 'subscription_cycle') {
-          // Renewal succeeded
+          // ----- BILLING CYCLE: TRIAL TO ACTIVE, ACTIVE -> INVOICE; HUBDB; DEAL -----
+          // 1 Get Important Info
+          let cyclePortalId = String(invoice.subscription_details.metadata.hsPortalId || '').trim();
+          let cycleContactId = String(invoice.subscription_details.metadata.hsContactId || '').trim();
+          let cycleStripeCustomerId = String(invoice.customer || '').trim();
+          let cycleStripeSubscriptionId = String(invoice.subscription || '').trim();
+
+          // 2 Fetch HubDb Row to get Status: ACTIVE VS TRIAL
+          let cycleHubDbRowId;
+          let cycleHubDbRowStatus;
+            const cycleHubDbRowUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows?contact_id__eq=' + cycleContactId + '&customer_id__eq=' + cycleStripeCustomerId + '&subscription_id__eq=' + cycleStripeSubscriptionId;
+            const tokenCycleHubDb01 = await setHubSpotToken(cyclePortalId);
+            const ACCESS_CYCLE_HUBDB_01 = tokenCycleHubDb01.access_token;
+            const cycleHubDbRowOptions = {
+              method: 'GET', 
+              headers: {
+                Authorization: `Bearer ${ACCESS_CYCLE_HUBDB_01}`
+              }
+            };
+            try {
+              const cycleHubDbRowResponse = await fetch(cycleHubDbRowUrl, cycleHubDbRowOptions);
+              const cycleHubDbRowData = await cycleHubDbRowResponse.json();
+              cycleHubDbRowId = cycleHubDbRowData.results[0].hs_id;
+              cycleHubDbRowStatus = cycleHubDbRowData.results[0].subscription_status.name;
+            } catch (error) {
+              console.error(error);
+            }
+            console.log('Subscription Status from HubDb:',cycleHubDbRowStatus);
+
+            // 3 Get the rest of Info
+            let cyclePayerType = String(invoice.subscription_details.metadata.payer_type || '').trim();
+            let cycleEmail = String(invoice.subscription_details.metadata.email || '').trim();
+            let cycleFullName = String(invoice.subscription_details.metadata.full_name || '').trim();
+            let cycleAddress = String(invoice.customer_address.line1 || '').trim();
+            let cycleCity = String(invoice.customer_address.city || '').trim();
+            let cycleZip = String(invoice.customer_address.postal_code || '').trim();
+            let cycleState = String(invoice.customer_address.state || '').trim();
+            let cycleCountry = String(invoice.customer_address.country || '').trim();
+            let setCycleState = cycleCountry.toUpperCase() === 'US' ? usStateName(cycleState) : cycleCountry || '';
+            let setCycleCountry = countryName(cycleCountry);
+            let cycleCompanyName;
+            let cycleCompanyId;
+            if(cyclePayerType === 'company'){
+              cycleCompanyName = String(invoice.subscription_details.metadata.company || '').trim();
+              cycleCompanyId = String(invoice.subscription_details.metadata.hsCompanyId || '').trim();
+            }else{
+              cycleCompanyName = '';
+              cycleCompanyId = '';
+            }
+            let cycleProductName = String(invoice.subscription_details.metadata.product_name || '').trim();
+            let cycleCurrentPeriodStart = Number(invoice.lines.data[0].period.start * 1000);
+            let setCycleCurrentPeriodStart = stripeSecondsToHubSpotDatePicker(invoice.lines.data[0].period.start);
+            let cycleCurrentPeriodEnd = Number(invoice.lines.data[0].period.end * 1000);
+            let setCycleCurrentPeriodEnd = stripeSecondsToHubSpotDatePicker(invoice.lines.data[0].period.end);
+            let cyclePaymentDate = Number(invoice.created);
+            let cycleAmount = Number((invoice.amount_paid / 100).toFixed(2));
+            let cyclePaymentIntentId = String(invoice.payment_intent || '').trim();
+            let cycleChargeId = String(invoice.charge || '').trim();;
+            let cycleCharge = await stripe.charges.retrieve(cycleChargeId);
+            let cyclePaymentMethodType = String(cycleCharge.payment_method_details.type || '').trim();
+            let cycleDealId = String(invoice.subscription_details.metadata.hsDealId || '').trim();
+            let cycleStripeSubscriptionStatus;
+            if(cycleHubDbRowStatus === 'trialing'){
+              cycleStripeSubscriptionStatus = 'StartActive';
+            }else if(cycleHubDbRowStatus === 'active'){
+              cycleStripeSubscriptionStatus = 'Ongoing';
+            }
+
+            // ----- UPDATE DEAL STAGE IF TRIAL TO ACTIVE -----
+            if(cycleHubDbRowStatus === 'trialing'){
+              const cycleTrialDealBody = {
+                properties: {
+                  amount: cycleAmount,
+                  closedate: Number(cyclePaymentDate * 1000),
+                  dealstage: '3311151352',
+                },
+              };
+              const cycleTrialDealUrl = 'https://api.hubapi.com/crm/v3/objects/0-3/' + cycleDealId;
+              const tokenCycleDeal = await setHubSpotToken(cyclePortalId);
+              const ACCESS_CYCLE_DEAL = tokenCycleDeal.access_token;
+              const cycleTrialDealOptions = {
+                method: 'PATCH',
+                headers: {
+                  Authorization: `Bearer ${ACCESS_CYCLE_DEAL}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(cycleTrialDealBody)
+              };
+              try {
+                const cycleTrialDealRes = await fetch(cycleTrialDealUrl, cycleTrialDealOptions);
+                const cycleTrialDealData = await cycleTrialDealRes.json();
+                if (!cycleTrialDealRes.ok) {
+                  console.error('Trial To Active Deal update failed:', cycleTrialDealRes.status, cycleTrialDealData);
+                } else {
+                  console.log('Trial To Active Deal updated');
+                }
+              } catch (err) {
+                console.error('Fetch error creating deal:', err);
+              }
+          }
+
+          // ----- CREATE PDF INVOICE FOR BILLING CYCLE -----
+          // 1 Search previous Invoices to get Invoice Sufix
+          const tokenCycleInv01 = await setHubSpotToken(cyclePortalId);
+          const ACCESS_TOKEN_CYCLE_INV_01 = tokenCycleInv01.access_token;
+          const invoiceYear = new Date().getFullYear();
+          const startSuffix = 1000;
+          const lastInvoiceSuffix = await searchInvoicesByYear(ACCESS_TOKEN_CYCLE_INV_01, invoiceYear);
+          console.log(lastInvoiceSuffix);
+          const setInvoiceSuffix = lastInvoiceSuffix != null ? lastInvoiceSuffix + 1 : startSuffix;
+          
+          // 2 Prepare Invoice Body
+          let setCycleBillToName;
+          if(cyclePayerType === 'company'){
+            setCycleBillToName = cycleCompanyName;
+          }else if(cyclePayerType === 'individual'){
+            setCycleBillToName = cycleFullName;
+          }
+          const paymentMethodLabels = {
+            card: 'Card',
+            google_pay: 'GooglePay',   // as you prefer (no space)
+            apple_pay: 'Apple Pay',
+            us_bank_account: 'US Bank Account'
+          };
+          let cycleStringActiveBillingCycle = `${formatInvoiceDate(setCycleCurrentPeriodStart) ?? ''} - ${formatInvoiceDate(setCycleCurrentPeriodEnd) ?? ''}`;
+
+          // 3 Prepare Body to print Invoice PDF
+          const printInvoice = {
+            invoice_number: `INV-${invoiceYear}-${setInvoiceSuffix}`,
+            issue_date: stripeSecondsToHubSpotDatePicker(cyclePaymentDate),
+            due_date: stripeSecondsToHubSpotDatePicker(cyclePaymentDate),
+            statement_descriptor: "Stripe",
+            payment_id: cyclePaymentIntentId,
+            payment_method: paymentMethodLabels[cyclePaymentMethodType] ?? cyclePaymentMethodType,
+            status: "Paid",
+            subtotal: cycleAmount,
+            tax: 0.00,
+            total: cycleAmount,
+            amount_paid: cycleAmount,
+            balance_due: 0.00,
+            seller: {
+              name: "No Bounds Digital",
+              address_line1: "328 W High St",
+              city: "Elizabethtown",
+              state: "Pennsylvania",
+              postal_code: "17022",
+              country: "United States",
+              email: "nenad@noboundsdigital"
+            },
+            bill_to: {
+              name: setCycleBillToName,
+              email: cycleEmail,
+              address_line1: cycleAddress,
+              city: cycleCity,
+              state: setCycleState,
+              postal_code: cycleZip,
+              country: setCycleCountry
+            },
+            line_items: [
+              { name: cycleProductName, quantity: 1, unit_price: getAmount, type: 'subscription', billing_cycle: cycleStringActiveBillingCycle },
+            ],
+            // You can compute these or pass them precomputed
+          };
+
+          // 4 Build PDF (Buffer)
+          const createPdf = new FormData();
+          const pdfDataUri = await prepareInvoice(printInvoice);
+          let pdfData = pdfDataUri.replaceAll("data:application/pdf;filename=generated.pdf;base64,","");
+          pdfData = pdfData.replaceAll('"', '');
+          const buffer = Buffer.from(pdfData, "base64")
+
+          // 2 Upload to HubSpot Files using folderId
+          const fileName = `INV-${invoiceYear}-${setInvoiceSuffix}.pdf`;
+          createPdf.append('fileName', fileName);
+          createPdf.append('file', buffer, fileName);
+          createPdf.append('options', JSON.stringify({
+            "access":  "PUBLIC_NOT_INDEXABLE",
+            "overwrite": false
+          }));
+          createPdf.append('folderId', '282421374140');
+          
+          // 5 Insert PDF into Files
+          const tokenPdf01 = await setHubSpotToken(getPortalId);
+          const ACCESS_TOKEN_PDF_01 = tokenPdf01.access_token;
+          const client =  axios.create({
+            baseURL: 'https://api.hubapi.com',
+            headers: { 
+              accept: 'application/json', 
+              Authorization: `Bearer ${ACCESS_TOKEN_PDF_01}`
+            }
+          });
+          
+          let getPdfId;
+          let getPdfUrl;
+          try {
+            const ApiResponse2 = await client.post('/files/v3/files', createPdf, {
+              headers: createPdf.getHeaders()
+            });
+            getPdfId = ApiResponse2.data.id;
+            getPdfUrl = ApiResponse2.data.url;
+          } catch (err) {
+            console.error(err);
+            throw err;
+          }
+          console.log('File uploaded!');
+          let setPdfUrl = getPdfUrl.replace('https://146896786.fs1.hubspotusercontent-eu1.net', 'https://nbd-shop.nenad-code.dev');
+
+          // ----- BILLING CYCLE Creates Record in Custom Object INVOICE -----
+          // 1 Prepare Invoice Custom Object Body
+          const invoiceBody = {
+            properties: {
+              invoice_year: invoiceYear,
+              invoice_number_sufix: setInvoiceSuffix,
+              invoice_number: `INV-${invoiceYear}-${setInvoiceSuffix}`,
+              issue_date: stripeSecondsToHubSpotDatePicker(cyclePaymentDate),
+              due_date: stripeSecondsToHubSpotDatePicker(cyclePaymentDate),
+              status: 'Paid',
+              statement_descriptor: 'Stripe',
+              transaction_type: 'Subscription',
+              payment_id: cyclePaymentIntentId,
+              payment_method: paymentMethodLabels[cyclePaymentMethodType] ?? cyclePaymentMethodType,
+              product: cycleProductName,
+              quantity: 1,
+              amount_subtotal: cycleAmount,
+              amount_due: cycleAmount,
+              amount_total: cycleAmount,
+              bill_to_name: setCycleBillToName,
+              bill_to_email: cycleEmail,
+              bill_to_address: cycleAddress,
+              bill_to_city: cycleCity,
+              bill_to_postal_code: cycleZip,
+              bill_to_state: setCycleState,
+              bill_to_country: setCycleCountry,
+              stripe_customer_id: cycleStripeCustomerId,
+              stripe_subscription_id: cycleStripeSubscriptionId,
+              contact_id: cycleContactId,
+              printed_invoice_id: getPdfId,
+              printed_invoice_url: setPdfUrl,
+            }
+          };
+
+          // 2 Create Invoice Custom Object Record
+          const createCycleInvoiceUrl = 'https://api.hubapi.com/crm/v3/objects/2-192773368';
+          const tokenCycleInv02 = await setHubSpotToken(cyclePortalId);
+          const ACCESS_TOKEN_CYCLE_INV_02 = tokenCycleInv02.access_token;
+          let getCycleInvoiceId;
+          const createCycleInvoiceOptions = {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${ACCESS_TOKEN_CYCLE_INV_02}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(invoiceBody)
+          };
+          try {
+            const invoiceCycleRes = await fetch(createCycleInvoiceUrl, createCycleInvoiceOptions);
+            const invoiceCycleData = await invoiceCycleRes.json();
+            getCycleInvoiceId = invoiceCycleData.id;
+            if (!invoiceCycleRes.ok) {
+              console.error('Invoice create failed:', invoiceCycleRes.status, invoiceCycleData);
+            } else {
+              console.log('Invoice created');
+            }
+          } catch (err) {
+            console.error('Fetch error creating deal:', err);
+          }
+
+          // 3 Create Note for Invoice Custom Object Record and associte to it Invoice PDF
+          const cycleNoteOwner = '44516880';
+          const cycleNoteUrl = 'https://api.hubapi.com/crm/v3/objects/notes';
+          let cycleCreateNoteBody = '<div style="" dir="auto" data-top-level="true"><p style="margin:0;"><strong><span style="color: #151E21;">INV-' + invoiceYear + '-' + setInvoiceSuffix + '</span></strong></p></div>';
+          const cycleNoteBody = {
+            properties: {
+              hs_timestamp: Number(cyclePaymentDate * 1000),
+              hs_note_body: cycleCreateNoteBody,
+              hubspot_owner_id: cycleNoteOwner,
+              hs_attachment_ids: getPdfId
+            },
+            associations: [
+              {
+                to: {
+                  id: getCycleInvoiceId
+                },
+                types: [
+                  {
+                    associationCategory: "USER_DEFINED",
+                    associationTypeId: 14
+                  } 
+                ]
+              }
+            ]
+          };
+          const tokenCycleNote01 = await setHubSpotToken(cyclePortalId);
+          const ACCESS_TOKEN_CYCLE_NOTE_01 = tokenCycleNote01.access_token;
+          const createCycleNoteOptions = {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${ACCESS_TOKEN_CYCLE_NOTE_01}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(cycleNoteBody)
+          };
+          
+          try {
+            const cycleNoteResponse = await fetch(cycleNoteUrl, createCycleNoteOptions);
+            const cycleNoteData = await cycleNoteResponse.json();
+            if(cycleNoteData){
+              console.log('Note is created and associated with Invoice PDF to Invoice Object');
+            }
+          } catch (error) {
+            console.error(error);
+          }
+
+          //----- Associate Invoice Custom Object to Contact ---
+          const cycleInvoiceToContactUrl = 'https://api.hubapi.com/crm/v4/objects/2-192773368/' + getCycleInvoiceId + '/associations/contacts/' + cycleContactId;
+          const tokenCycleAssociation01 = await setHubSpotToken(cyclePortalId);
+          const ACCESS_TOKEN_CYCLE_ASSOCIATION_01 = tokenCycleAssociation01.access_token;
+          const cycleInvoiceToContactOptions = {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${ACCESS_TOKEN_CYCLE_ASSOCIATION_01}`, 
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify([
+              { associationCategory: 'USER_DEFINED', associationTypeId:26 }
+            ])
+          };
+          try {
+            const cycleInvoiceToContactRes = await fetch(cycleInvoiceToContactUrl, cycleInvoiceToContactOptions);
+            const cycleInvoiceToContactData = await cycleInvoiceToContactRes.json();
+            if(cycleInvoiceToContactData){
+              console.log('Invoice is associated to Contact');
+            }
+          } catch (error) {
+            console.error(error);
+          }
+
+          //----- Associate Invoice Custom Object to Company ---
+          if(cyclePayerType === 'company' && cycleCompanyId){
+            const cycleInvoiceToCompanyUrl = 'https://api.hubapi.com/crm/v4/objects/2-192773368/' + getCycleInvoiceId + '/associations/companies/' + cycleCompanyId;
+            const tokenCycleAssociation02 = await setHubSpotToken(cyclePortalId);
+            const ACCESS_TOKEN_CYCLE_ASSOCIATION_02 = tokenCycleAssociation02.access_token;
+            const cycleInvoiceToCompanyOptions = {
+              method: 'PUT',
+              headers: {
+                Authorization: `Bearer ${ACCESS_TOKEN_CYCLE_ASSOCIATION_02}`, 
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify([
+                { associationCategory: 'USER_DEFINED', associationTypeId:30 }
+              ])
+            };
+            try {
+              const cycleInvoiceToCompanyRes = await fetch(cycleInvoiceToCompanyUrl, cycleInvoiceToCompanyOptions);
+              const cycleInvoiceToCompanyData = await cycleInvoiceToCompanyRes.json();
+              if(cycleInvoiceToCompanyData){
+                console.log('Invoice is associated to Company');
+              }
+            } catch (error) {
+              console.error(error);
+            }
+          }
+          //----- Update BILLING CYCLE Contact to get PDF data to send Marketing Email
+          const updateCycleContactWithPdfUrl = 'https://api.hubapi.com/crm/v3/objects/contacts/' + cycleContactId;
+          const updateCycleContactWithPdfBody = {
+            properties: {
+              invoice_number: String('INV-' + invoiceYear + '-' + setInvoiceSuffix),
+              invoice_pdf_url: setPdfUrl,
+              invoice_pdf_id: getPdfId,
+              subscription_status: cycleStripeSubscriptionStatus,
+              subscription_product_name: cycleProductName,
+            },
+          };
+          const tokenUpdateCycleContactWithPdf = await setHubSpotToken(cyclePortalId);
+          const ACCESS_TOKEN_UPDATE_CYCLE_CONTACT_WITH_PDF = tokenUpdateCycleContactWithPdf.access_token;
+          const updateCycleContactWithPdfOptions = {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${ACCESS_TOKEN_UPDATE_CYCLE_CONTACT_WITH_PDF}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(updateCycleContactWithPdfBody)
+          };
+
+          try {
+            const updateCycleContactWithPdfRes = await fetch(updateCycleContactWithPdfUrl, updateCycleContactWithPdfOptions);
+            const updateCycleContactWithPdfData = await updateCycleContactWithPdfRes.json();
+            if(updateCycleContactWithPdfData){
+              console.log('Contact is ready to send Invoice Marketing Email');
+            }
+          } catch (error) {
+            console.error(error);
+          }
+
+          // ----- BILLING CYCLE Update HubDB and publish it -----
+          const updateCycleRowUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/rows/' + cycleHubDbRowId + '/draft';
+          const publishCycleHubDbUrl = 'https://api.hubapi.com/cms/v3/hubdb/tables/' + 725591276 + '/draft/publish';
+
+          // Insert Subscription in HubDb
+          const tokenInfoCycleHubDb02 = await setHubSpotToken(cyclePortalId);
+          const ACCESS_TOKEN_CYCLE_HUBDB_02 = tokenInfoCycleHubDb02.access_token;
+          const hubDbCycleOptions = {
+              method: 'PATCH',
+              headers: {
+                Authorization: `Bearer ${ACCESS_TOKEN_CYCLE_HUBDB_02}`, 
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                values: {
+                  subscription_status: { name: 'active', type: 'option' },
+                  current_period_end: cycleCurrentPeriodEnd
+                }
+              })
+            };
+            try {
+            const hubDbCycleResponse = await fetch(updateCycleRowUrl, hubDbCycleOptions);
+            const hubDbCycleData = await hubDbCycleResponse.json();
+            // Publish HubDb
+            if(hubDbCycleData){
+                const tokenInfoCycleHubDb03 = await setHubSpotToken(cyclePortalId);
+                const ACCESS_TOKEN_CYCLE_HUBDB_03 = tokenInfoCycleHubDb03.access_token;
+                const publishCycleHubDbOptions = {method: 'POST', headers: {Authorization: `Bearer ${ACCESS_TOKEN_CYCLE_HUBDB_03}`}};
+                try {
+                    const publishCycleHubDbResponse = await fetch(publishCycleHubDbUrl, publishCycleHubDbOptions);
+                    const publishCycleHubDbData = await publishCycleHubDbResponse.json();
+                    if(publishCycleHubDbData){
+                        console.log('Biling Cycle Subscription updated and published in HubDB')
+                    }
+                } catch (error) {
+                console.error(error);
+                }
+              }
+            } catch (error) {
+            console.error(error);
+            }
         }
         // Optionally push to HubSpot or your DB
         // amount = dollars(invoice.amount_paid, invoice.currency)
