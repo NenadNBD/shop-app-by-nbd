@@ -2252,6 +2252,40 @@ function isPriceChange(sub) {
   
     async onTrialWillEnd(event) {
       const sub = event.data.object;
+      let getRemiderPortalId = String(sub.metadata.hsPortalId || '').trim();
+      let getReminderContactId = String(sub.metadata.hsContactId || '').trim();
+      let getReminderTrialEnd = stripeSecondsToHubSpotDatePicker(sub.trial_end);
+      let setReminderTrialEnd = `${formatInvoiceDate(getReminderTrialEnd) ?? ''}`;
+      let getRemiderProductName = String(sub.metadata.product_name || '').trim();
+
+      const trialEndReminderUrl = 'https://api.hubapi.com/crm/v3/objects/contacts/' + getReminderContactId;
+      const trialEndReminderBody = {
+        properties: {
+          send_trial_ends_reminder: 'Yes',
+          trial_ends_reminder_date: setReminderTrialEnd,
+          subscription_product_name: getRemiderProductName,
+        },
+      };
+      const tokenTrialEndReminder = await setHubSpotToken(getRemiderPortalId);
+      const ACCESS_TOKEN_END_TRIAL_REMINDER = tokenTrialEndReminder.access_token;
+      const trialEndReminderOptions = {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN_END_TRIAL_REMINDER}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(trialEndReminderBody)
+      };
+
+      try {
+        const trialEndReminderRes = await fetch(trialEndReminderUrl, trialEndReminderOptions);
+        const trialEndReminderData = await trialEndReminderRes.json();
+        if(trialEndReminderData){
+          console.log('Contact is ready to be reminded for trial Ending in 3 days');
+        }
+      } catch (error) {
+        console.error(error);
+      }
       // Notify user that trial ends on sub.trial_end (unix timestamp)
     },
   };  
