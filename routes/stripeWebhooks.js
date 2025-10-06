@@ -25,6 +25,7 @@ router.post('/webhooks/stripe', express.raw({ type: 'application/json' }), async
 
   setImmediate(async () => {
     try {
+      console.log('→ Incoming Stripe event:', event.type);
       switch (event.type) {
         // ONE-TIME + DONATIONS (PaymentIntent based)
         case 'payment_intent.succeeded': {
